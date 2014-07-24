@@ -41,6 +41,7 @@ public final class LiveStreamListConverter implements ActionListener {
 	public static void main(String[] args) {
 		
 		LiveStreamListConverter converter = new LiveStreamListConverter();
+		converter.prepareHTTPConnection();
 		converter.createGUI();
 		converter.readBaseConfig();
 		converter.readStationList();
@@ -68,13 +69,29 @@ public final class LiveStreamListConverter implements ActionListener {
 		adressList = new Vector<StreamAdress>();
 	}
 	
+	private void prepareHTTPConnection() {
+		if (amInotAtHome()) {
+			setHTTPproxy("swg.izm.fraunhofer.de",80);
+		}
+	}
+
+	private boolean amInotAtHome() {
+		return "BERLIN.IZM.FHG.DE".equals( System.getenv("USERDNSDOMAIN") );
+	}
+	
+	private void setHTTPproxy(String host, int port) {
+		System.setProperty("http.proxyHost", host);
+		System.setProperty("http.proxyPort", String.valueOf(port));
+		System.out.println("Use http proxy: "+System.getProperty("http.proxyHost")+":"+System.getProperty("http.proxyPort"));
+	}
+	
 	private void createGUI() {
 		GUI.setSystemLookAndFeel();
 		
 		ets2listFileChooser = new JFileChooser("./");
 		playlistFileChooser = new JFileChooser("./");
 		ets2listFileChooser.setFileFilter(new FileNameExtensionFilter("SII file(*.sii)","sii"));
-		playlistFileChooser.setFileFilter(new FileNameExtensionFilter("SII file(*.sii)","sii"));
+		playlistFileChooser.setFileFilter(new FileNameExtensionFilter("PLS file(*.pls)","pls"));
 		
 		JPanel fileLabelPanel = new JPanel(new GridLayout(2,1,3,3));
 		JPanel fileNamePanel = new JPanel(new GridLayout(2,1,3,3));
