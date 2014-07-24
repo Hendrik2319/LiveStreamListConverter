@@ -1,6 +1,7 @@
 package net.schwarzbaer.java.games.ets2.livestreamconverter;
 
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -17,8 +18,10 @@ import java.net.URL;
 import java.util.Vector;
 
 import javax.swing.BorderFactory;
+import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -35,8 +38,8 @@ public final class LiveStreamListConverter implements ActionListener {
 	// http://yp.shoutcast.com/sbin/tunein-station.pls?id=56499    sdx's synthetic experience!
 	// http://yp.shoutcast.com/sbin/tunein-station.pls?id=560047   : ampedOut :
 	
-	private static final String FILENAME_BASECONFIG = "fileLocations.cfg";
-	private static final String FILENAME_STATIONS_LIST = "known_stations.cfg";
+	private static final String FILENAME_BASECONFIG = "ETS2_fileLocations.cfg";
+	private static final String FILENAME_STATIONS_LIST = "ETS2_known_stations.cfg";
 
 	public static void main(String[] args) {
 		
@@ -54,6 +57,7 @@ public final class LiveStreamListConverter implements ActionListener {
 	private JTextField ets2listFileNameTextField;
 	private JTextField playlistFileNameTextField;
 	private JTextArea ets2listContentTextArea;
+	private JTextArea stationListTextArea;
 	private JTextArea playlistContentTextArea;
 	private JFileChooser ets2listFileChooser;
 	private JFileChooser playlistFileChooser;
@@ -108,17 +112,21 @@ public final class LiveStreamListConverter implements ActionListener {
 		fileSelectPanel.add(fileLabelPanel,BorderLayout.WEST);
 		fileSelectPanel.add(fileNamePanel,BorderLayout.CENTER);
 		fileSelectPanel.add(fileSelectButtonPanel,BorderLayout.EAST);
+		fileSelectPanel.add(GUI.createLeftAlignedPanel( GUI.createButton("import station adresses", "import station adresses", this) ),BorderLayout.SOUTH);
 		
+		stationListTextArea = createContentTextArea();
 		ets2listContentTextArea = createContentTextArea();
 		playlistContentTextArea = createContentTextArea();
 		
-		JPanel fileContentPanel = new JPanel(new GridLayout(1,2,3,3));
-		fileContentPanel.add(ets2listContentTextArea);
-		fileContentPanel.add(playlistContentTextArea);
+		JPanel fileContentPanel = new JPanel(new GridLayout(0,1,3,3));
+		JPanel fileOutputContentPanel = new JPanel(new GridLayout(1,0,3,3));
+		fileContentPanel      .add(wrapScrollView(stationListTextArea    ,600,200));
+		fileOutputContentPanel.add(wrapScrollView(ets2listContentTextArea,300,200));
+		fileOutputContentPanel.add(wrapScrollView(playlistContentTextArea,300,200));
+		fileContentPanel.add(fileOutputContentPanel);
 		
-		JPanel buttonPanel = new JPanel(new GridLayout(1,3,3,3));
+		JPanel buttonPanel = new JPanel(new GridLayout(1,0,3,3));
 		buttonPanel.add(GUI.createButton("create ETS2 file", "create ETS2 file", this));
-		buttonPanel.add(GUI.createButton("import station adresses", "import station adresses", this));
 		buttonPanel.add(GUI.createButton("create playlist file", "create playlist file", this));
 		
 		JPanel contentPane = new JPanel(new BorderLayout(3,3));
@@ -132,9 +140,15 @@ public final class LiveStreamListConverter implements ActionListener {
 		mainWindow.setSizeAsMinSize();
 	}
 
+	private JComponent wrapScrollView(JTextArea textArea, int width, int height) {
+		JScrollPane scrollPane = new JScrollPane(textArea);
+		scrollPane.getViewport().setPreferredSize(new Dimension(width,height));
+		return scrollPane;
+	}
+
 	private JTextArea createContentTextArea() {
-		JTextArea textArea = new JTextArea(30,50);
-		textArea.setBorder(BorderFactory.createEtchedBorder());
+		JTextArea textArea = new JTextArea(/*rows,columns*/);
+		//textArea.setBorder(BorderFactory.createEtchedBorder());
 		textArea.setEditable(false);
 		return textArea;
 	}
@@ -171,13 +185,18 @@ public final class LiveStreamListConverter implements ActionListener {
 		}
 		if (e.getActionCommand().equals("import station adresses")) {
 			adressList.clear();
+			stationListTextArea.setText("");;
 			for (Station station: stationList) {
-				Vector<StreamAdress> streamAdresses = station.getStreamAdresses();
+				Vector<StreamAdress> streamAdresses = station.readStreamAdressesFromWeb();
 				if (streamAdresses!=null) {
 					adressList.addAll(streamAdresses);
 					System.out.println("station: "+station);
-					for (StreamAdress addr: streamAdresses)
+					stationListTextArea.append(String.format("station: %s\r\n", station.name));
+					stationListTextArea.append(String.format("  list: %s\r\n", station.url));
+					for (StreamAdress addr: streamAdresses) {
 						System.out.println("\t"+addr);
+						stationListTextArea.append(String.format("    %s\r\n", addr.url));
+					}
 				}
 			}
 			return;
@@ -227,23 +246,20 @@ public final class LiveStreamListConverter implements ActionListener {
 		String str;
 		try {
 			while( (str=input.readLine())!=null ) {
-				if (str.startsWith("url" )) {
-					int n = parseFieldNumber(str,"url".length());
-					if (n<0) { System.out.println("Can't read field number in\""+str+"\""); continue; }
-					String value = parseFieldValue(str);
-					while (stationList.size()<=n) stationList.add(new Station());
-					stationList.get(n).setURL(value);
-				}
-				if (str.startsWith("name")) {
-					int n = parseFieldNumber(str,"name".length());
-					if (n<0) { System.out.println("Can't read field number in\""+str+"\""); continue; }
-					String value = parseFieldValue(str);
-					while (stationList.size()<=n) stationList.add(new Station());
-					stationList.get(n).setName(value);
-				}
+				if (str.startsWith("url" )) processStationListLine(str, "url" );
+				if (str.startsWith("name")) processStationListLine(str, "name");
+				if (str.startsWith("type")) processStationListLine(str, "type");
 			}
 		} catch (IOException e1) {}
 		try { input.close(); } catch (IOException e) {}
+	}
+
+	private void processStationListLine(String str, String field) {
+		int n = parseFieldNumber(str,field.length());
+		if (n<0) { System.out.println("Can't read field number in\""+str+"\""); return; }
+		String value = parseFieldValue(str);
+		while (stationList.size()<=n) stationList.add(new Station());
+		stationList.get(n).set(field,value);
 	}
 
 	private String parseFieldValue(String str) {
@@ -302,28 +318,29 @@ public final class LiveStreamListConverter implements ActionListener {
 		
 		private String url;
 		private String name;
+		private String type;
 
 		public Station() {
 			url = null;
 			name = null;
+			type = null;
 		}
 
-		public void setURL (String url ) { this.url  = url;  }
-		public void setName(String name) { this.name = name; }
+		public void set(String field, String value) {
+			if (field.equals("url" )) { this.url  = value; return; }
+			if (field.equals("name")) { this.name = value; return; }
+			if (field.equals("type")) { this.type = value; return; }
+			throw new IllegalArgumentException("Unknown field: \""+field+"\" (value:"+value+")");
+		}
 
 		@Override
 		public String toString() {
-			return "Station [ name=\"" + name + "\", url=\"" + url + "\" ]";
+			return "Station [ name=\"" + name + "\", url=\"" + url + "\", type=\"" + type + "\" ]";
 		}
 		
-		public Vector<StreamAdress> getStreamAdresses() {
+		public Vector<StreamAdress> readStreamAdressesFromWeb() {
 			if (url==null) return null;
-			Object obj;
-			try { obj = new URL(url).getContent(); }
-			catch (MalformedURLException e) { e.printStackTrace(); return null; }
-			catch (IOException e) { e.printStackTrace(); return null; }
-			if (obj==null) return null;
-			String content = getContent(obj);
+			String content = getContent(url);
 			if (content==null) return null;
 			
 			BufferedReader input = new BufferedReader( new StringReader(content) );
@@ -331,24 +348,40 @@ public final class LiveStreamListConverter implements ActionListener {
 			String str;
 			try {
 				while( (str=input.readLine())!=null ) {
-					if (str.startsWith("File")) {
-						int pos = str.indexOf('=');
-						if (pos>=0)
-							adresses.add(
-								new StreamAdress(
-									String.format("%s(%d)",name,adresses.size()+1),
-									str.substring(pos+1)
-								)
-							);
+					if ("plain".equals(type)) {
+						adresses.add(
+							new StreamAdress(
+								String.format("%s(%d)",name,adresses.size()+1),
+								str
+							)
+						);
+					} else if ("pls".equals(type)) {
+						if (str.startsWith("File")) {
+							int pos = str.indexOf('=');
+							if (pos>=0)
+								adresses.add(
+									new StreamAdress(
+										String.format("%s(%d)",name,adresses.size()+1),
+										str.substring(pos+1)
+									)
+								);
+						}
 					}
 				}
 			} catch (IOException e1) {}
 			
 			try { input.close(); } catch (IOException e) {}
+			
+			if (adresses.size()==1) adresses.get(0).name = name;
 			return adresses;
 		}
 
-		private String getContent(Object obj) {
+		private static String getContent(String url) {
+			Object obj;
+			try { obj = new URL(url).getContent(); }
+			catch (MalformedURLException e) { e.printStackTrace(); return null; }
+			catch (IOException e) { e.printStackTrace(); return null; }
+			
 			if (obj==null) return null;
 			if (obj instanceof String) return (String)obj;
 			if (obj instanceof InputStream) {
