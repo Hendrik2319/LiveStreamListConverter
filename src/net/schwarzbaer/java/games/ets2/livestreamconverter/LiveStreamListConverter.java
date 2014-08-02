@@ -233,7 +233,9 @@ public final class LiveStreamListConverter implements ActionListener {
 		sb.append("live_stream_def : _nameless.35BF.92E8 {\r\n");
 		for (int i=0; i<adressList.size(); i++) {
 			StreamAdress adress = adressList.get(i);
-			sb.append(String.format("stream_data[]: \"%s|%s\"\r\n", adress.url,adress.name));
+			//sb.append(String.format("stream_data[]: \"%s|%s\"\r\n", adress.url,adress.name));
+			sb.append(String.format("stream_data[]: \"%s|%s|%s|%s|%d|%d\"\r\n", adress.url,adress.name,adress.genre,adress.country,adress.bitRate,adress.isFavorite));
+			//stream_data[32]: "http://striiming.trio.ee/uuno.mp3|Raadio Uuno|Rock|EST|128|0"
 		}
 		sb.append("}\r\n");
 		sb.append("}\r\n");
@@ -299,12 +301,20 @@ public final class LiveStreamListConverter implements ActionListener {
 	
 	private static class StreamAdress {
 		
-		private String url;
-		private String name;
+		public String url;
+		public String name;
+		public String genre;
+		public String country;
+		public int bitRate;
+		public int isFavorite;
 
 		public StreamAdress(String name, String url) {
-			this.name = name;
 			this.url = url;
+			this.name = name;
+			this.genre = "";
+			this.country = "";
+			this.bitRate = 0;
+			this.isFavorite = 1;
 		}
 
 		@Override
