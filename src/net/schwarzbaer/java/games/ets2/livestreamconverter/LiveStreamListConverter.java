@@ -51,6 +51,15 @@ public final class LiveStreamListConverter implements ActionListener {
 		for(Station station : converter.stationList) {
 			System.out.println("station: "+station);
 		}
+		
+		for (int i=0; i<args.length; i++) {
+			if (args[i].equalsIgnoreCase("-automatic")) {
+				converter.importStationAdressesTask();
+				converter.createETS2fileTask();
+				converter.createPlaylistFileTask();
+				converter.mainWindow.dispose();
+			}
+		}
 	}
 
 	private StandardMainWindow mainWindow;
@@ -172,36 +181,48 @@ public final class LiveStreamListConverter implements ActionListener {
 			return;
 		}
 		if (e.getActionCommand().equals("create ETS2 file")) {
-			String content = createETS2streamlist(adressList);
-			writeContentTo(content,ets2listFile);
-			ets2listContentTextArea.setText(content);
+			createETS2fileTask();
 			return;
 		}
 		if (e.getActionCommand().equals("create playlist file")) {
-			String content = createPlaylist(adressList);
-			writeContentTo(content,playlistFile);
-			playlistContentTextArea.setText(content);
+			createPlaylistFileTask();
 			return;
 		}
 		if (e.getActionCommand().equals("import station adresses")) {
-			adressList.clear();
-			stationListTextArea.setText("");;
-			for (Station station: stationList) {
-				Vector<StreamAdress> streamAdresses = station.readStreamAdressesFromWeb();
-				if (streamAdresses!=null) {
-					adressList.addAll(streamAdresses);
-					System.out.println("station: "+station);
-					stationListTextArea.append(String.format("station: %s\r\n", station.name));
-					stationListTextArea.append(String.format("  list: %s\r\n", station.url));
-					for (StreamAdress addr: streamAdresses) {
-						System.out.println("\t"+addr);
-						stationListTextArea.append(String.format("    %s\r\n", addr.url));
-					}
-				}
-			}
+			importStationAdressesTask();
 			return;
 		}
 		
+	}
+
+	private void importStationAdressesTask() {
+		adressList.clear();
+		stationListTextArea.setText("");;
+		for (Station station: stationList) {
+			Vector<StreamAdress> streamAdresses = station.readStreamAdressesFromWeb();
+			if (streamAdresses!=null) {
+				adressList.addAll(streamAdresses);
+				System.out.println("station: "+station);
+				stationListTextArea.append(String.format("station: %s\r\n", station.name));
+				stationListTextArea.append(String.format("  list: %s\r\n", station.url));
+				for (StreamAdress addr: streamAdresses) {
+					System.out.println("\t"+addr);
+					stationListTextArea.append(String.format("    %s\r\n", addr.url));
+				}
+			}
+		}
+	}
+
+	private void createPlaylistFileTask() {
+		String content = createPlaylist(adressList);
+		writeContentTo(content,playlistFile);
+		playlistContentTextArea.setText(content);
+	}
+
+	private void createETS2fileTask() {
+		String content = createETS2streamlist(adressList);
+		writeContentTo(content,ets2listFile);
+		ets2listContentTextArea.setText(content);
 	}
 
 	private void writeContentTo(String content, File outputFile) {
