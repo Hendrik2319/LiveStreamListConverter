@@ -52,13 +52,19 @@ public final class LiveStreamListConverter implements ActionListener {
 			System.out.println("station: "+station);
 		}
 		
+		boolean flag_automatic = false;
+		boolean flag_keep_gui  = false;
+		
 		for (int i=0; i<args.length; i++) {
-			if (args[i].equalsIgnoreCase("-automatic")) {
-				converter.importStationAdressesTask();
-				converter.createETS2fileTask();
-				converter.createPlaylistFileTask();
-				converter.mainWindow.dispose();
-			}
+			if (args[i].equalsIgnoreCase("-automatic")) flag_automatic = true;
+			if (args[i].equalsIgnoreCase("-keepgui")) flag_keep_gui = true;
+		}
+		
+		if (flag_automatic) {
+			converter.importStationAdressesTask();
+			converter.createETS2fileTask();
+			converter.createPlaylistFileTask();
+			if (!flag_keep_gui) converter.mainWindow.dispose();
 		}
 	}
 
