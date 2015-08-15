@@ -30,6 +30,7 @@ import javax.swing.JTextField;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 import net.schwarzbaer.gui.GUI;
+import net.schwarzbaer.gui.ProgressDialog;
 import net.schwarzbaer.gui.StandardMainWindow;
 
 public final class LiveStreamListConverter implements ActionListener {
@@ -64,9 +65,13 @@ public final class LiveStreamListConverter implements ActionListener {
 		}
 		
 		if (flag_automatic) {
-			converter.importStationAdressesTask();
-			converter.createETS2fileTask();
-			converter.createPlaylistFileTask();
+			ProgressDialog pd = new ProgressDialog(converter.mainWindow, "Progress");
+			pd.showDialog();
+			if (!pd.wasCanceled()) converter.importStationAdressesTask(pd);
+			if (!pd.wasCanceled()) converter.createETS2fileTask(pd);
+			if (!pd.wasCanceled()) converter.createPlaylistFileTask(pd);
+			pd.closeDialog();
+			
 			if (!flag_keep_gui) converter.mainWindow.dispose();
 		}
 	}
@@ -205,15 +210,24 @@ public final class LiveStreamListConverter implements ActionListener {
 			return;
 		}
 		if (e.getActionCommand().equals("create ETS2 file")) {
-			createETS2fileTask();
+			ProgressDialog pd = new ProgressDialog(mainWindow, "Progress");
+			pd.showDialog();
+			createETS2fileTask(pd);
+			pd.closeDialog();
 			return;
 		}
 		if (e.getActionCommand().equals("create playlist file")) {
-			createPlaylistFileTask();
+			ProgressDialog pd = new ProgressDialog(mainWindow, "Progress");
+			pd.showDialog();
+			createPlaylistFileTask(pd);
+			pd.closeDialog();
 			return;
 		}
 		if (e.getActionCommand().equals("import station adresses")) {
-			importStationAdressesTask();
+			ProgressDialog pd = new ProgressDialog(mainWindow, "Progress");
+			pd.showDialog();
+			importStationAdressesTask(pd);
+			pd.closeDialog();
 			return;
 		}
 		if (e.getActionCommand().equals("goto ETS2 file")) {
@@ -252,10 +266,14 @@ public final class LiveStreamListConverter implements ActionListener {
 		Runtime.getRuntime().exec(cmdarray);
 	}
 
-	private void importStationAdressesTask() {
+	private void importStationAdressesTask(ProgressDialog pd) {
+		pd.setTaskTitle("Import station adresses:");
+		pd.setValue(0, stationList.size());
 		adressList.clear();
 		stationListTextArea.setText("");;
-		for (Station station: stationList) {
+		//for (Station station: stationList) {
+		for (int i=0; i<stationList.size(); i++) {
+			Station station = stationList.get(i);
 			Vector<StreamAdress> streamAdresses = station.readStreamAdressesFromWeb();
 			if (streamAdresses!=null) {
 				adressList.addAll(streamAdresses);
@@ -267,17 +285,20 @@ public final class LiveStreamListConverter implements ActionListener {
 					stationListTextArea.append(String.format("    %s\r\n", addr.url));
 				}
 			}
+			pd.setValue(i+1);
 		}
 	}
 
-	private void createPlaylistFileTask() {
-		String content = createPlaylist(adressList);
+	private void createPlaylistFileTask(ProgressDialog pd) {
+		pd.setTaskTitle("Create playlist file:");
+		String content = createPlaylist(pd,adressList);
 		writeContentTo(content,playlistFile);
 		playlistContentTextArea.setText(content);
 	}
 
-	private void createETS2fileTask() {
-		String content = createETS2streamlist(adressList);
+	private void createETS2fileTask(ProgressDialog pd) {
+		pd.setTaskTitle("Create ETS2 file:");
+		String content = createETS2streamlist(pd,adressList);
 		writeContentTo(content,ets2listFile);
 		ets2listContentTextArea.setText(content);
 	}
@@ -290,7 +311,7 @@ public final class LiveStreamListConverter implements ActionListener {
 		output.close();
 	}
 
-	private String createPlaylist(Vector<StreamAdress> adressList) {
+	private String createPlaylist(ProgressDialog pd, Vector<StreamAdress> adressList) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("[playlist]").append("\r\n");
 		sb.append("numberofentries=").append(adressList.size()).append("\r\n");
@@ -304,7 +325,7 @@ public final class LiveStreamListConverter implements ActionListener {
 		return sb.toString();
 	}
 
-	private String createETS2streamlist(Vector<StreamAdress> adressList) {
+	private String createETS2streamlist(ProgressDialog pd, Vector<StreamAdress> adressList) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("SiiNunit\r\n");
 		sb.append("{\r\n");
