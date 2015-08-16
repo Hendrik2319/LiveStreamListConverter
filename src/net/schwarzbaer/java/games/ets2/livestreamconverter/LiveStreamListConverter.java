@@ -421,27 +421,6 @@ public final class LiveStreamListConverter implements ActionListener {
 		try { input.close(); } catch (IOException e) {}
 	}
 
-	private void processStationListLine(String str, String field) {
-		int n = parseFieldNumber(str,field.length());
-		if (n<0) { System.out.println("Can't read field number in\""+str+"\""); return; }
-		String value = parseFieldValue(str);
-		while (stationList.size()<=n) stationList.add(new Station());
-		stationList.get(n).set(field,value);
-	}
-
-	private String parseFieldValue(String str) {
-		int pos = str.indexOf('=');
-		if (pos<0) return null;
-		return str.substring(pos+1);
-	}
-
-	private int parseFieldNumber(String str, int fromIndex) {
-		int end = str.indexOf('=',fromIndex);
-		if (end<0) return -1;
-		try { return Integer.parseInt(str.substring(fromIndex,end)); }
-		catch (NumberFormatException e) { return -1; }
-	}
-
 	private void readBaseConfig() {
 		BufferedReader input;
 		try { input = new BufferedReader( new FileReader(FILENAME_BASECONFIG) ); } catch (FileNotFoundException e) { return; }
