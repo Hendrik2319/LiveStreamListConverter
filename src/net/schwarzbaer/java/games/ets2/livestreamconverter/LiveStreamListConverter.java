@@ -409,11 +409,13 @@ public final class LiveStreamListConverter implements ActionListener {
 		BufferedReader input;
 		try { input = new BufferedReader( new FileReader(FILENAME_STATIONS_LIST) ); } catch (FileNotFoundException e) { return; }
 		String str;
+		Station station = null;
 		try {
 			while( (str=input.readLine())!=null ) {
-				if (str.startsWith("url" )) processStationListLine(str, "url" );
-				if (str.startsWith("name")) processStationListLine(str, "name");
-				if (str.startsWith("type")) processStationListLine(str, "type");
+				if (str.toLowerCase().equals("[station]")) { station = new Station(); stationList.add(station); continue; }
+				if (str.startsWith("url=" )) { station.set("url" , str.substring("url=" .length())); continue; } // processStationListLine(str, "url" );
+				if (str.startsWith("name=")) { station.set("name", str.substring("name=".length())); continue; } // processStationListLine(str, "name");
+				if (str.startsWith("type=")) { station.set("type", str.substring("type=".length())); continue; } // processStationListLine(str, "type");
 			}
 		} catch (IOException e1) {}
 		try { input.close(); } catch (IOException e) {}
