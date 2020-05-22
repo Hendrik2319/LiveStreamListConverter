@@ -52,10 +52,6 @@ public final class LiveStreamListConverter implements ActionListener {
 		converter.prepareHTTPConnection();
 		converter.createGUI();
 		converter.readBaseConfig();
-		converter.readStationList();
-		for(Station station : converter.stationList) {
-			System.out.println("station: "+station);
-		}
 		
 		boolean flag_automatic = false;
 		boolean flag_keep_gui  = false;
@@ -327,6 +323,14 @@ public final class LiveStreamListConverter implements ActionListener {
 	}
 
 	private void importStationAdressesTask(ProgressDialog pd) {
+		pd.setTaskTitle("Read station list:");
+		pd.setIndeterminate(true);
+		
+		readStationList();
+		for(Station station : stationList) {
+			System.out.println("station: "+station);
+		}
+		
 		pd.setTaskTitle("Import station adresses:");
 		pd.setValue(0, stationList.size());
 		adressList.clear();
@@ -410,6 +414,7 @@ public final class LiveStreamListConverter implements ActionListener {
 		try { input = new BufferedReader( new FileReader(FILENAME_STATIONS_LIST) ); } catch (FileNotFoundException e) { return; }
 		String str;
 		Station station = null;
+		stationList.clear();
 		try {
 			while( (str=input.readLine())!=null ) {
 				if (str.toLowerCase().equals("[station]")) { station = new Station(); stationList.add(station); continue; }
@@ -427,10 +432,10 @@ public final class LiveStreamListConverter implements ActionListener {
 		String str;
 		try {
 			while( (str=input.readLine())!=null ) {
-				if (str.startsWith("ets2listFile=")) { ets2listFile = new File(str.substring("ets2listFile=".length())); System.out.println("Found predefined ets2list file in config: \""+ets2listFile.getPath()+"\""); ets2listFileNameTextField.setText(ets2listFile.getPath()); ets2listFileChooser.setSelectedFile(ets2listFile); }
-				if (str.startsWith("playlistFile=")) { playlistFile = new File(str.substring("playlistFile=".length())); System.out.println("Found predefined playlist file in config: \""+playlistFile.getPath()+"\""); playlistFileNameTextField.setText(playlistFile.getPath()); playlistFileChooser.setSelectedFile(playlistFile); }
-				if (str.startsWith("texteditor="  )) { texteditorPath = str.substring("texteditor=" .length()); System.out.println("Found path to text editor in config: \""+texteditorPath+"\""); editConfigButton.setEnabled(true); }
-				if (str.startsWith("filemanager=" )) { filemanagerPath    = str.substring("filemanager=".length()); System.out.println("Found path to filemanager in config: \""+filemanagerPath+"\""); gotoETS2fileFolder.setEnabled(true); gotoPlaylistFolder.setEnabled(true); }
+				if (str.startsWith("ets2listFile=")) { ets2listFile    = new File(str.substring("ets2listFile=".length())); System.out.println("Found predefined ets2list file in config: \""+ets2listFile.getPath()+"\""); ets2listFileNameTextField.setText(ets2listFile.getPath()); ets2listFileChooser.setSelectedFile(ets2listFile); }
+				if (str.startsWith("playlistFile=")) { playlistFile    = new File(str.substring("playlistFile=".length())); System.out.println("Found predefined playlist file in config: \""+playlistFile.getPath()+"\""); playlistFileNameTextField.setText(playlistFile.getPath()); playlistFileChooser.setSelectedFile(playlistFile); }
+				if (str.startsWith("texteditor="  )) { texteditorPath  = str.substring("texteditor=" .length()); System.out.println("Found path to text editor in config: \""+texteditorPath+"\""); editConfigButton.setEnabled(true); }
+				if (str.startsWith("filemanager=" )) { filemanagerPath = str.substring("filemanager=".length()); System.out.println("Found path to filemanager in config: \""+filemanagerPath+"\""); gotoETS2fileFolder.setEnabled(true); gotoPlaylistFolder.setEnabled(true); }
 			}
 		} catch (IOException e1) {}
 		try { input.close(); } catch (IOException e) {}
@@ -440,10 +445,10 @@ public final class LiveStreamListConverter implements ActionListener {
 		PrintWriter output;
 		try { output = new PrintWriter(FILENAME_BASECONFIG); }
 		catch (FileNotFoundException e) { e.printStackTrace(); return; }
-		if (ets2listFile!=null) output.println("ets2listFile="+ets2listFile.getPath());
-		if (playlistFile!=null) output.println("playlistFile="+playlistFile.getPath());
-		if (texteditorPath!=null) output.println("texteditor=" +texteditorPath);
-		if (filemanagerPath   !=null) output.println("filemanager="+filemanagerPath   );
+		if (ets2listFile   !=null) output.println("ets2listFile="+ets2listFile.getPath());
+		if (playlistFile   !=null) output.println("playlistFile="+playlistFile.getPath());
+		if (texteditorPath !=null) output.println("texteditor="  +texteditorPath );
+		if (filemanagerPath!=null) output.println("filemanager=" +filemanagerPath);
 		output.close();
 	}
 	
@@ -507,12 +512,13 @@ public final class LiveStreamListConverter implements ActionListener {
 			try {
 				while( (str=input.readLine())!=null ) {
 					if ("plain".equals(type)) {
-						adresses.add(
-							new StreamAdress(
-								String.format("%s(%d)",name,adresses.size()+1),
-								str
-							)
-						);
+						if (isURL(str))
+							adresses.add(
+								new StreamAdress(
+									String.format("%s(%d)",name,adresses.size()+1),
+									str
+								)
+							);
 					} else if ("pls".equals(type)) {
 						if (str.startsWith("File")) {
 							int pos = str.indexOf('=');
@@ -532,6 +538,15 @@ public final class LiveStreamListConverter implements ActionListener {
 			
 			if (adresses.size()==1) adresses.get(0).name = name;
 			return adresses;
+		}
+
+		private boolean isURL(String url) {
+			try {
+				new URL(url);
+				return true;
+			} catch (MalformedURLException e) {
+				return false;
+			}
 		}
 
 		private static String getContent(String url) {
