@@ -7,15 +7,16 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.io.StringReader;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Vector;
 
@@ -54,7 +55,7 @@ public final class LiveStreamListConverter implements ActionListener {
 		catch (ClassNotFoundException | InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException e) {}
 		
 		final LiveStreamListConverter converter = new LiveStreamListConverter();
-		converter.readBaseConfig();
+		converter.readBaseConfigFromFile();
 		converter.updateGUIAccess();
 		
 		boolean flag_automatic = false;
@@ -225,7 +226,7 @@ public final class LiveStreamListConverter implements ActionListener {
 			if (ets2listFileChooser.showSaveDialog(mainWindow)==JFileChooser.APPROVE_OPTION) {
 				ets2listFile = ets2listFileChooser.getSelectedFile();
 				ets2listFileNameTextField.setText(ets2listFile.getPath());
-				writeBaseConfig();
+				writeBaseConfigToFile();
 			}
 			break;
 		
@@ -233,7 +234,7 @@ public final class LiveStreamListConverter implements ActionListener {
 			if (playlistFileChooser.showSaveDialog(mainWindow)==JFileChooser.APPROVE_OPTION) {
 				playlistFile = playlistFileChooser.getSelectedFile();
 				playlistFileNameTextField.setText(playlistFile.getPath());
-				writeBaseConfig();
+				writeBaseConfigToFile();
 			}
 			break;
 			
@@ -301,10 +302,9 @@ public final class LiveStreamListConverter implements ActionListener {
 		pd.setTaskTitle("Read station list:");
 		pd.setIndeterminate(true);
 		
-		readStationList();
-		for(Station station : stationList) {
+		readStationListFromFile();
+		for(Station station : stationList)
 			System.out.println("station: "+station);
-		}
 		
 		pd.setTaskTitle("Import station adresses:");
 		pd.setValue(0, stationList.size());
@@ -347,11 +347,14 @@ public final class LiveStreamListConverter implements ActionListener {
 	}
 
 	private void writeContentTo(String content, File outputFile) {
-		PrintWriter output;
-		try { output = new PrintWriter(outputFile); }
-		catch (FileNotFoundException e) { e.printStackTrace(); return; }
-		output.println(content);
-		output.close();
+		try (PrintWriter output = new PrintWriter(outputFile))
+		{
+			output.println(content);
+		}
+		catch (FileNotFoundException e)
+		{
+			e.printStackTrace();
+		}
 	}
 
 	private String createPlaylist(ProgressDialog pd, Vector<StreamAdress> adressList) {
@@ -384,49 +387,72 @@ public final class LiveStreamListConverter implements ActionListener {
 		return sb.toString();
 	}
 
-	private void readStationList() {
-		BufferedReader input;
-		try { input = new BufferedReader( new FileReader(FILENAME_STATIONS_LIST) ); } catch (FileNotFoundException e) { return; }
-		String str;
-		Station station = null;
+	private static String parseValue(String line, String prefix)
+	{
+		if (line.startsWith(prefix))
+			return line.substring(prefix.length());
+		return null;
+	}
+
+	private void readStationListFromFile()
+	{
 		stationList.clear();
-		try {
-			while( (str=input.readLine())!=null ) {
-				if (str.toLowerCase().equals("[station]")) { station = new Station(); stationList.add(station); continue; }
-				if (station!=null) {
-					if (str.startsWith("url=" )) { station.set("url" , str.substring("url=" .length())); continue; } // processStationListLine(str, "url" );
-					if (str.startsWith("name=")) { station.set("name", str.substring("name=".length())); continue; } // processStationListLine(str, "name");
-					if (str.startsWith("type=")) { station.set("type", str.substring("type=".length())); continue; } // processStationListLine(str, "type");
+		try (BufferedReader input = new BufferedReader( new InputStreamReader(new FileInputStream(FILENAME_STATIONS_LIST), StandardCharsets.UTF_8)))
+		{
+			String line, valueStr;
+			Station station = null;
+			while( (line=input.readLine())!=null )
+			{
+				if (line.toLowerCase().equals("[station]")) stationList.add(station = new Station());
+				if (station!=null)
+				{
+					if ( (valueStr = parseValue(line,"url=" ))!=null ) station.url  = valueStr;
+					if ( (valueStr = parseValue(line,"name="))!=null ) station.name = valueStr;
+					if ( (valueStr = parseValue(line,"type="))!=null ) station.type = valueStr;
 				}
 			}
-		} catch (IOException e1) {}
-		try { input.close(); } catch (IOException e) {}
+		}
+		catch (FileNotFoundException ex) {}
+		catch (IOException ex) {
+			System.err.printf("IOException while reading StationList: %s%n", ex.getMessage());
+			//ex.printStackTrace();
+		}
 	}
-
-	private void readBaseConfig() {
-		BufferedReader input;
-		try { input = new BufferedReader( new FileReader(FILENAME_BASECONFIG) ); } catch (FileNotFoundException e) { return; }
-		String str;
-		try {
-			while( (str=input.readLine())!=null ) {
-				if (str.startsWith("ets2listFile=")) { ets2listFile    = new File(str.substring("ets2listFile=".length())); System.out.println("Found predefined ets2list file in config: \""+ets2listFile.getPath()+"\""); ets2listFileNameTextField.setText(ets2listFile.getPath()); ets2listFileChooser.setSelectedFile(ets2listFile); }
-				if (str.startsWith("playlistFile=")) { playlistFile    = new File(str.substring("playlistFile=".length())); System.out.println("Found predefined playlist file in config: \""+playlistFile.getPath()+"\""); playlistFileNameTextField.setText(playlistFile.getPath()); playlistFileChooser.setSelectedFile(playlistFile); }
-				if (str.startsWith("texteditor="  )) { texteditorPath  = str.substring("texteditor=" .length()); System.out.println("Found path to text editor in config: \""+texteditorPath+"\""); }
-				if (str.startsWith("filemanager=" )) { filemanagerPath = str.substring("filemanager=".length()); System.out.println("Found path to filemanager in config: \""+filemanagerPath+"\""); }
+	
+	private void readBaseConfigFromFile() {
+		try (BufferedReader input = new BufferedReader( new InputStreamReader(new FileInputStream(FILENAME_BASECONFIG), StandardCharsets.UTF_8)))
+		{
+			String line, valueStr;
+			while( (line=input.readLine())!=null ) {
+				if ( (valueStr = parseValue(line,"ets2listFile="))!=null ) { ets2listFile    = new File(valueStr); System.out.println("Found predefined ets2list file in config: \""+ets2listFile.getPath()+"\""); ets2listFileNameTextField.setText(ets2listFile.getPath()); ets2listFileChooser.setSelectedFile(ets2listFile); }
+				if ( (valueStr = parseValue(line,"playlistFile="))!=null ) { playlistFile    = new File(valueStr); System.out.println("Found predefined playlist file in config: \""+playlistFile.getPath()+"\""); playlistFileNameTextField.setText(playlistFile.getPath()); playlistFileChooser.setSelectedFile(playlistFile); }
+				if ( (valueStr = parseValue(line,"texteditor="  ))!=null ) { texteditorPath  = valueStr;           System.out.println("Found path to text editor in config: \""+texteditorPath+"\""); }
+				if ( (valueStr = parseValue(line,"filemanager=" ))!=null ) { filemanagerPath = valueStr;           System.out.println("Found path to filemanager in config: \""+filemanagerPath+"\""); }
 			}
-		} catch (IOException e1) {}
-		try { input.close(); } catch (IOException e) {}
+		}
+		catch (FileNotFoundException ex) {}
+		catch (IOException ex) {
+			System.err.printf("IOException while reading BaseConfig: %s%n", ex.getMessage());
+			//ex.printStackTrace();
+		}
 	}
 
-	private void writeBaseConfig() {
-		PrintWriter output;
-		try { output = new PrintWriter(FILENAME_BASECONFIG); }
-		catch (FileNotFoundException e) { e.printStackTrace(); return; }
-		if (ets2listFile   !=null) output.println("ets2listFile="+ets2listFile.getPath());
-		if (playlistFile   !=null) output.println("playlistFile="+playlistFile.getPath());
-		if (texteditorPath !=null) output.println("texteditor="  +texteditorPath );
-		if (filemanagerPath!=null) output.println("filemanager=" +filemanagerPath);
-		output.close();
+	private void writeBaseConfigToFile() {
+		try (PrintWriter output = new PrintWriter(FILENAME_BASECONFIG, StandardCharsets.UTF_8))
+		{
+			if (ets2listFile   !=null) output.println("ets2listFile="+ets2listFile.getPath());
+			if (playlistFile   !=null) output.println("playlistFile="+playlistFile.getPath());
+			if (texteditorPath !=null) output.println("texteditor="  +texteditorPath );
+			if (filemanagerPath!=null) output.println("filemanager=" +filemanagerPath);
+		}
+		catch (FileNotFoundException ex) {
+			System.err.printf("FileNotFoundException while writing BaseConfig: %s%n", ex.getMessage());
+			//ex.printStackTrace();
+		}
+		catch (IOException ex) {
+			System.err.printf("IOException while writing BaseConfig: %s%n", ex.getMessage());
+			//ex.printStackTrace();
+		}
 	}
 	
 	private static class StreamAdress {
@@ -466,13 +492,6 @@ public final class LiveStreamListConverter implements ActionListener {
 			type = null;
 		}
 
-		public void set(String field, String value) {
-			if (field.equals("url" )) { this.url  = value; return; }
-			if (field.equals("name")) { this.name = value; return; }
-			if (field.equals("type")) { this.type = value; return; }
-			throw new IllegalArgumentException("Unknown field: \""+field+"\" (value:"+value+")");
-		}
-
 		@Override
 		public String toString() {
 			return "Station [ name=\"" + name + "\", url=\"" + url + "\", type=\"" + type + "\" ]";
@@ -483,35 +502,29 @@ public final class LiveStreamListConverter implements ActionListener {
 			String content = getContent(url);
 			if (content==null) return null;
 			
-			BufferedReader input = new BufferedReader( new StringReader(content) );
 			Vector<StreamAdress> adresses = new Vector<>();
-			String str;
-			try {
-				while( (str=input.readLine())!=null ) {
-					if ("plain".equals(type)) {
-						if (isURL(str))
+			content.lines().forEach(line -> {
+				if ("plain".equals(type)) {
+					if (isURL(line))
+						adresses.add(
+							new StreamAdress(
+								String.format("%s(%d)",name,adresses.size()+1),
+								line
+							)
+						);
+				} else if ("pls".equals(type)) {
+					if (line.startsWith("File")) {
+						int pos = line.indexOf('=');
+						if (pos>=0)
 							adresses.add(
 								new StreamAdress(
 									String.format("%s(%d)",name,adresses.size()+1),
-									str
+									line.substring(pos+1)
 								)
 							);
-					} else if ("pls".equals(type)) {
-						if (str.startsWith("File")) {
-							int pos = str.indexOf('=');
-							if (pos>=0)
-								adresses.add(
-									new StreamAdress(
-										String.format("%s(%d)",name,adresses.size()+1),
-										str.substring(pos+1)
-									)
-								);
-						}
 					}
 				}
-			} catch (IOException e1) {}
-			
-			try { input.close(); } catch (IOException e) {}
+			});
 			
 			if (adresses.size()==1) adresses.get(0).name = name;
 			return adresses;
@@ -534,11 +547,10 @@ public final class LiveStreamListConverter implements ActionListener {
 			catch (IOException e) { e.printStackTrace(); return null; }
 			
 			if (obj==null) return null;
-			if (obj instanceof String) return (String)obj;
-			if (obj instanceof InputStream) {
+			if (obj instanceof String str) return str;
+			if (obj instanceof InputStream input) {
 				StringBuilder sb = new StringBuilder();
 				byte[] buffer = new byte[10000];
-				InputStream input = (InputStream)obj;
 				try {
 					int len;
 					while( (len=input.read(buffer))>=0 )
