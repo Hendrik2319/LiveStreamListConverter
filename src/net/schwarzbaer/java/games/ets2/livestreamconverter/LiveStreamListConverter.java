@@ -14,7 +14,8 @@ import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringReader;
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Vector;
 
@@ -30,9 +31,9 @@ import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
-import net.schwarzbaer.gui.GUI;
-import net.schwarzbaer.gui.ProgressDialog;
-import net.schwarzbaer.gui.StandardMainWindow;
+import net.schwarzbaer.java.lib.gui.GUI;
+import net.schwarzbaer.java.lib.gui.ProgressDialog;
+import net.schwarzbaer.java.lib.gui.StandardMainWindow;
 
 public final class LiveStreamListConverter implements ActionListener {
 	
@@ -107,9 +108,9 @@ public final class LiveStreamListConverter implements ActionListener {
 		playlistFile = null;
 		texteditorPath = null;
 		filemanagerPath = null;
-		stationList = new Vector<Station>();
-		adressList = new Vector<StreamAdress>();
-		enabledComponents = new Vector<EnabledComponent>();
+		stationList = new Vector<>();
+		adressList = new Vector<>();
+		enabledComponents = new Vector<>();
 	}
 	
 	private void prepareHTTPConnection() {
@@ -418,9 +419,11 @@ public final class LiveStreamListConverter implements ActionListener {
 		try {
 			while( (str=input.readLine())!=null ) {
 				if (str.toLowerCase().equals("[station]")) { station = new Station(); stationList.add(station); continue; }
-				if (str.startsWith("url=" )) { station.set("url" , str.substring("url=" .length())); continue; } // processStationListLine(str, "url" );
-				if (str.startsWith("name=")) { station.set("name", str.substring("name=".length())); continue; } // processStationListLine(str, "name");
-				if (str.startsWith("type=")) { station.set("type", str.substring("type=".length())); continue; } // processStationListLine(str, "type");
+				if (station!=null) {
+					if (str.startsWith("url=" )) { station.set("url" , str.substring("url=" .length())); continue; } // processStationListLine(str, "url" );
+					if (str.startsWith("name=")) { station.set("name", str.substring("name=".length())); continue; } // processStationListLine(str, "name");
+					if (str.startsWith("type=")) { station.set("type", str.substring("type=".length())); continue; } // processStationListLine(str, "type");
+				}
 			}
 		} catch (IOException e1) {}
 		try { input.close(); } catch (IOException e) {}
@@ -507,7 +510,7 @@ public final class LiveStreamListConverter implements ActionListener {
 			if (content==null) return null;
 			
 			BufferedReader input = new BufferedReader( new StringReader(content) );
-			Vector<StreamAdress> adresses = new Vector<StreamAdress>();
+			Vector<StreamAdress> adresses = new Vector<>();
 			String str;
 			try {
 				while( (str=input.readLine())!=null ) {
@@ -542,16 +545,17 @@ public final class LiveStreamListConverter implements ActionListener {
 
 		private boolean isURL(String url) {
 			try {
-				new URL(url);
+				new URI(url).toURL();
 				return true;
-			} catch (MalformedURLException e) {
-				return false;
 			}
+			catch (URISyntaxException e) { return false; }
+			catch (MalformedURLException e) { return false; }
 		}
 
 		private static String getContent(String url) {
-			Object obj;
-			try { obj = new URL(url).getContent(); }
+			Object obj; 
+			try { obj = new URI(url).toURL().getContent(); }
+			catch (URISyntaxException e) { e.printStackTrace(); return null; }
 			catch (MalformedURLException e) { e.printStackTrace(); return null; }
 			catch (IOException e) { e.printStackTrace(); return null; }
 			
