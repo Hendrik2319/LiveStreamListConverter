@@ -1,4 +1,4 @@
-package net.schwarzbaer.java.games.ets2.livestreamconverter;
+package net.schwarzbaer.java.tools.livestreamlistconverter;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
