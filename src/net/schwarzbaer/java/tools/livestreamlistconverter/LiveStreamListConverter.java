@@ -44,8 +44,8 @@ public final class LiveStreamListConverter implements ActionListener {
 	// http://yp.shoutcast.com/sbin/tunein-station.pls?id=56499    sdx's synthetic experience!
 	// http://yp.shoutcast.com/sbin/tunein-station.pls?id=560047   : ampedOut :
 	
-	private static final String FILENAME_BASECONFIG = "ETS2_fileLocations.cfg";
-	private static final String FILENAME_STATIONS_LIST = "ETS2_known_stations.cfg";
+	private static final String FILENAME_BASECONFIG    = "LiveStreamListConverter.FileLocations.cfg";
+	private static final String FILENAME_STATIONS_LIST = "LiveStreamListConverter.KnownStations.cfg";
 
 	public static void main(String[] args) {
 		
@@ -183,7 +183,7 @@ public final class LiveStreamListConverter implements ActionListener {
 		contentPane.add(fileContentPanel,BorderLayout.CENTER);
 		contentPane.add(buttonPanel,BorderLayout.SOUTH);
 		
-		mainWindow = new StandardMainWindow("ETS2 - livestream list converter");
+		mainWindow = new StandardMainWindow("Livestream List Converter");
 		mainWindow.startGUI(contentPane);
 		mainWindow.setSizeAsMinSize();
 	}
