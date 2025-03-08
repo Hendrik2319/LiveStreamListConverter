@@ -28,9 +28,11 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.SwingUtilities;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.UIManager;
+import javax.swing.UnsupportedLookAndFeelException;
 
+import net.schwarzbaer.java.lib.gui.Disabler;
+import net.schwarzbaer.java.lib.gui.FileChooser;
 import net.schwarzbaer.java.lib.gui.GUI;
 import net.schwarzbaer.java.lib.gui.ProgressDialog;
 import net.schwarzbaer.java.lib.gui.StandardMainWindow;
@@ -48,11 +50,12 @@ public final class LiveStreamListConverter implements ActionListener {
 	private static final String FILENAME_STATIONS_LIST = "LiveStreamListConverter.KnownStations.cfg";
 
 	public static void main(String[] args) {
+		try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); }
+		catch (ClassNotFoundException | InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException e) {}
 		
 		final LiveStreamListConverter converter = new LiveStreamListConverter();
-		converter.prepareHTTPConnection();
-		converter.createGUI();
 		converter.readBaseConfig();
+		converter.updateGUIAccess();
 		
 		boolean flag_automatic = false;
 		boolean flag_keep_gui  = false;
@@ -63,45 +66,41 @@ public final class LiveStreamListConverter implements ActionListener {
 		}
 		
 		if (flag_automatic) {
-			final ProgressDialog pd = new ProgressDialog(converter.mainWindow, "Progress");
-			new Thread(new Runnable() {
-				@Override public void run() {
-					converter.enableGUI(false);
-					if (!pd.wasCanceled()) converter.importStationAdressesTask(pd);
-					if (!pd.wasCanceled()) converter.createETS2fileTask(pd);
-					if (!pd.wasCanceled()) converter.createPlaylistFileTask(pd);
-					pd.closeDialog();
-					converter.enableGUI(true);
-				}
-			}).start();
-			SwingUtilities.invokeLater(new Runnable() {
-				@Override public void run() {
-					pd.showDialog();
-				}
+			ProgressDialog.runWithProgressDialog(converter.mainWindow, "Progress", 200, pd -> {
+				converter.enableGUI(false);
+				if (!pd.wasCanceled()) converter.importStationAdressesTask(pd);
+				if (!pd.wasCanceled()) converter.createETS2fileTask(pd);
+				if (!pd.wasCanceled()) converter.createPlaylistFileTask(pd);
+				converter.enableGUI(true);
 			});
 			
 			if (!flag_keep_gui) converter.mainWindow.dispose();
 		}
 	}
+	
+	enum ActionCommands
+	{
+		SelectETS2File, SelectPlaylistFile,
+		GotoETS2File, GotoPlaylistFile,
+		CreateETS2File, CreatePlaylistFile,
+		ImportStationAdresses, EditConfigFiles,
+	}
 
-	private StandardMainWindow mainWindow;
-	private JTextField ets2listFileNameTextField;
-	private JTextField playlistFileNameTextField;
-	private JTextArea ets2listContentTextArea;
-	private JTextArea stationListTextArea;
-	private JTextArea playlistContentTextArea;
-	private JFileChooser ets2listFileChooser;
-	private JFileChooser playlistFileChooser;
+	private final StandardMainWindow mainWindow;
+	private final JTextField ets2listFileNameTextField;
+	private final JTextField playlistFileNameTextField;
+	private final JTextArea ets2listContentTextArea;
+	private final JTextArea stationListTextArea;
+	private final JTextArea playlistContentTextArea;
+	private final FileChooser ets2listFileChooser;
+	private final FileChooser playlistFileChooser;
 	private File ets2listFile;
 	private File playlistFile;
 	private String texteditorPath;
 	private Vector<Station> stationList;
 	private Vector<StreamAdress> adressList;
-	private JButton editConfigButton;
 	private String filemanagerPath;
-	private JButton gotoETS2fileFolder;
-	private JButton gotoPlaylistFolder;
-	private Vector<EnabledComponent> enabledComponents;
+	private final Disabler<ActionCommands> disabler;
 	
 	public LiveStreamListConverter() {
 		ets2listFile = null;
@@ -110,32 +109,12 @@ public final class LiveStreamListConverter implements ActionListener {
 		filemanagerPath = null;
 		stationList = new Vector<>();
 		adressList = new Vector<>();
-		enabledComponents = new Vector<>();
-	}
-	
-	private void prepareHTTPConnection() {
-		if (amInotAtHome()) {
-			setHTTPproxy("swg.izm.fraunhofer.de",80);
-		}
-	}
-
-	private boolean amInotAtHome() {
-		return "BERLIN.IZM.FHG.DE".equals( System.getenv("USERDNSDOMAIN") );
-	}
-	
-	private void setHTTPproxy(String host, int port) {
-		System.setProperty("http.proxyHost", host);
-		System.setProperty("http.proxyPort", String.valueOf(port));
-		System.out.println("Use http proxy: "+System.getProperty("http.proxyHost")+":"+System.getProperty("http.proxyPort"));
-	}
-	
-	private void createGUI() {
-		GUI.setSystemLookAndFeel();
 		
-		ets2listFileChooser = new JFileChooser("./");
-		playlistFileChooser = new JFileChooser("./");
-		ets2listFileChooser.setFileFilter(new FileNameExtensionFilter("SII file(*.sii)","sii"));
-		playlistFileChooser.setFileFilter(new FileNameExtensionFilter("PLS file(*.pls)","pls"));
+		disabler = new Disabler<>();
+		disabler.setCareFor(ActionCommands.values());
+		
+		ets2listFileChooser = new FileChooser("SII file(*.sii)","sii");
+		playlistFileChooser = new FileChooser("PLS file(*.pls)","pls");
 		
 		JPanel fileLabelPanel = new JPanel(new GridLayout(2,1,3,3));
 		JPanel fileNamePanel = new JPanel(new GridLayout(2,1,3,3));
@@ -146,15 +125,15 @@ public final class LiveStreamListConverter implements ActionListener {
 		playlistFileNameTextField = GUI.createOutputTextField(20);
 		GUI.addLabelAndField(fileLabelPanel, fileNamePanel, "ETS2 file", ets2listFileNameTextField);
 		GUI.addLabelAndField(fileLabelPanel, fileNamePanel, "playlist" , playlistFileNameTextField);
-		fileSelectButtonPanel.add(addToEnabledComponents(GUI.createButton("select", "select ETS2 file", this)));
-		fileSelectButtonPanel.add(addToEnabledComponents(GUI.createButton("select", "select playlist file", this)));
-		gotoFolderButtonPanel.add(addToEnabledComponents(gotoETS2fileFolder = GUI.createButton("open folder", "goto ETS2 file", this, filemanagerPath!=null)));
-		gotoFolderButtonPanel.add(addToEnabledComponents(gotoPlaylistFolder = GUI.createButton("open folder", "goto playlist file", this, filemanagerPath!=null)));
+		fileSelectButtonPanel.add(createButton("select", ActionCommands.SelectETS2File));
+		fileSelectButtonPanel.add(createButton("select", ActionCommands.SelectPlaylistFile));
+		gotoFolderButtonPanel.add(createButton("open folder", filemanagerPath!=null, ActionCommands.GotoETS2File));
+		gotoFolderButtonPanel.add(createButton("open folder", filemanagerPath!=null, ActionCommands.GotoPlaylistFile));
 		
 		JPanel addressListButtonPanel = new JPanel();
 		addressListButtonPanel.setLayout(new BoxLayout(addressListButtonPanel,BoxLayout.X_AXIS));
-		addressListButtonPanel.add(addToEnabledComponents(GUI.createButton("import station adresses", "import station adresses", this)));
-		addressListButtonPanel.add(addToEnabledComponents(editConfigButton = GUI.createButton("edit config files", "edit config files",this,texteditorPath!=null)));
+		addressListButtonPanel.add(createButton("import station adresses", ActionCommands.ImportStationAdresses));
+		addressListButtonPanel.add(createButton("edit config files", texteditorPath!=null, ActionCommands.EditConfigFiles));
 		
 		JPanel fileSelectPanel = new JPanel(new BorderLayout(3,3));
 		fileSelectPanel.add(fileLabelPanel,BorderLayout.WEST);
@@ -174,8 +153,8 @@ public final class LiveStreamListConverter implements ActionListener {
 		fileContentPanel.add(fileOutputContentPanel);
 		
 		JPanel buttonPanel = new JPanel(new GridLayout(1,0,3,3));
-		buttonPanel.add(GUI.createButton("create ETS2 file", "create ETS2 file", this));
-		buttonPanel.add(GUI.createButton("create playlist file", "create playlist file", this));
+		buttonPanel.add(createButton("create ETS2 file", ActionCommands.CreateETS2File));
+		buttonPanel.add(createButton("create playlist file", ActionCommands.CreatePlaylistFile));
 		
 		JPanel contentPane = new JPanel(new BorderLayout(3,3));
 		contentPane.setBorder(BorderFactory.createEmptyBorder(3,3,3,3));
@@ -188,33 +167,23 @@ public final class LiveStreamListConverter implements ActionListener {
 		mainWindow.setSizeAsMinSize();
 	}
 
-	private JComponent addToEnabledComponents(JComponent comp) {
-		enabledComponents.add(new EnabledComponent(comp));
-		return comp;
+	private void updateGUIAccess() {
+		enableGUI(true);
 	}
 
 	private void enableGUI(boolean enable) {
-		for( EnabledComponent enComp:enabledComponents ) {
-			if (!enable) {
-				enComp.wasEnabled = enComp.comp.isEnabled();
-				enComp.comp.setEnabled(enable);
-			} else {
-				if (enComp.wasEnabled)
-					enComp.comp.setEnabled(enable);
-			}
-		}
-	}
-	
-	private class EnabledComponent {
-
-		private JComponent comp;
-		public boolean wasEnabled;
-
-		public EnabledComponent(JComponent comp) {
-			this.comp = comp;
-			this.wasEnabled = true;
-		}
-		
+		disabler.setEnable(ac ->  switch (ac) {
+			case CreateETS2File, CreatePlaylistFile,
+				SelectETS2File, SelectPlaylistFile,
+				ImportStationAdresses
+				-> enable;
+				
+			case EditConfigFiles
+				-> enable && texteditorPath!=null;
+				
+			case GotoETS2File, GotoPlaylistFile
+				-> enable && filemanagerPath!=null;
+		});
 	}
 	
 	private JComponent wrapScrollView(JTextArea textArea, int width, int height) {
@@ -223,7 +192,21 @@ public final class LiveStreamListConverter implements ActionListener {
 		return scrollPane;
 	}
 
-	private JTextArea createContentTextArea() {
+	private JButton createButton(String title, ActionCommands ac)
+	{
+		return createButton( title, true, ac );
+	}
+	private JButton createButton(String title, boolean enabled, ActionCommands ac)
+	{
+		JButton comp = new JButton(title);
+		comp.setEnabled(enabled);
+		comp.addActionListener(this);
+		comp.setActionCommand( ac.name() );
+		disabler.add(ac, comp);
+		return comp;
+	}
+
+	private static JTextArea createContentTextArea() {
 		JTextArea textArea = new JTextArea(/*rows,columns*/);
 		//textArea.setBorder(BorderFactory.createEtchedBorder());
 		textArea.setEditable(false);
@@ -232,93 +215,84 @@ public final class LiveStreamListConverter implements ActionListener {
 
 	@Override
 	public void actionPerformed(ActionEvent e) {
-		if (e.getActionCommand().equals("select ETS2 file")) {
+		ActionCommands actionCommand;
+		try { actionCommand = ActionCommands.valueOf(e.getActionCommand()); }
+		catch (Exception e1) { return; }
+		
+		switch (actionCommand)
+		{
+		case SelectETS2File:
 			if (ets2listFileChooser.showSaveDialog(mainWindow)==JFileChooser.APPROVE_OPTION) {
 				ets2listFile = ets2listFileChooser.getSelectedFile();
 				ets2listFileNameTextField.setText(ets2listFile.getPath());
 				writeBaseConfig();
 			}
-			return;
-		}
-		if (e.getActionCommand().equals("select playlist file")) {
+			break;
+		
+		case SelectPlaylistFile:
 			if (playlistFileChooser.showSaveDialog(mainWindow)==JFileChooser.APPROVE_OPTION) {
 				playlistFile = playlistFileChooser.getSelectedFile();
 				playlistFileNameTextField.setText(playlistFile.getPath());
 				writeBaseConfig();
 			}
-			return;
-		}
-		if (e.getActionCommand().equals("create ETS2 file")) {
-			final ProgressDialog pd = new ProgressDialog(mainWindow, "Progress");
-			new Thread(new Runnable() {
-				@Override public void run() {
-					enableGUI(false);
-					createETS2fileTask(pd);
-					pd.closeDialog();
-					enableGUI(true);
-				}
-			}).start();
-			pd.showDialog();
-			return;
-		}
-		if (e.getActionCommand().equals("create playlist file")) {
-			final ProgressDialog pd = new ProgressDialog(mainWindow, "Progress");
-			new Thread(new Runnable() {
-				@Override public void run() {
-					enableGUI(false);
-					createPlaylistFileTask(pd);
-					pd.closeDialog();
-					enableGUI(true);
-				}
-			}).start();
-			pd.showDialog();
-			return;
-		}
-		if (e.getActionCommand().equals("import station adresses")) {
-			final ProgressDialog pd = new ProgressDialog(mainWindow, "Progress");
-			new Thread(new Runnable() {
-				@Override public void run() {
-					enableGUI(false);
-					importStationAdressesTask(pd);
-					pd.closeDialog();
-					enableGUI(true);
-				}
-			}).start();
-			pd.showDialog();
-			return;
-		}
-		if (e.getActionCommand().equals("goto ETS2 file")) {
-			if (ets2listFile!=null) {
+			break;
+			
+		case CreateETS2File:
+			ProgressDialog.runWithProgressDialog(mainWindow, "Progress", 200, pd -> {
+				enableGUI(false);
+				createETS2fileTask(pd);
+				enableGUI(true);
+			});
+			break;
+			
+		case CreatePlaylistFile:
+			ProgressDialog.runWithProgressDialog(mainWindow, "Progress", 200, pd -> {
+				enableGUI(false);
+				createPlaylistFileTask(pd);
+				enableGUI(true);
+			});
+			break;
+			
+		case ImportStationAdresses:
+			ProgressDialog.runWithProgressDialog(mainWindow, "Progress", 200, pd -> {
+				enableGUI(false);
+				importStationAdressesTask(pd);
+				enableGUI(true);
+			} );
+			break;
+			
+		case GotoETS2File:
+			if (filemanagerPath!=null && ets2listFile!=null) {
 				try {
-					execute(new String[]{filemanagerPath,ets2listFile.getParent()});
+					execute( filemanagerPath, ets2listFile.getParent() );
 				} catch (IOException e1) {
 					e1.printStackTrace();
 				}
 			}
-			return;
-		}
-		if (e.getActionCommand().equals("goto playlist file")) {
-			if (playlistFile!=null) {
+			break;
+			
+		case GotoPlaylistFile:
+			if (filemanagerPath!=null && playlistFile!=null) {
 				try {
-					execute(new String[]{filemanagerPath,playlistFile.getParent()});
+					execute( filemanagerPath, playlistFile.getParent() );
 				} catch (IOException e1) {
 					e1.printStackTrace();
 				}
 			}
-			return;
+			break;
+			
+		case EditConfigFiles:
+			if (texteditorPath!=null)
+				try {
+					execute( texteditorPath, FILENAME_BASECONFIG,FILENAME_STATIONS_LIST );
+				} catch (IOException e1) {
+					e1.printStackTrace();
+				}
+			break;
 		}
-		if (e.getActionCommand().equals("edit config files")) {
-			try {
-				execute(new String[]{texteditorPath,FILENAME_BASECONFIG,FILENAME_STATIONS_LIST});
-			} catch (IOException e1) {
-				e1.printStackTrace();
-			}
-			return;
-		}
-		
 	}
 
-	private void execute(String[] cmdarray) throws IOException {
+	private void execute(String... cmdarray) throws IOException {
 		System.out.println("Call command: "+Arrays.toString(cmdarray));
 		Runtime.getRuntime().exec(cmdarray);
 	}
@@ -437,8 +411,8 @@ public final class LiveStreamListConverter implements ActionListener {
 			while( (str=input.readLine())!=null ) {
 				if (str.startsWith("ets2listFile=")) { ets2listFile    = new File(str.substring("ets2listFile=".length())); System.out.println("Found predefined ets2list file in config: \""+ets2listFile.getPath()+"\""); ets2listFileNameTextField.setText(ets2listFile.getPath()); ets2listFileChooser.setSelectedFile(ets2listFile); }
 				if (str.startsWith("playlistFile=")) { playlistFile    = new File(str.substring("playlistFile=".length())); System.out.println("Found predefined playlist file in config: \""+playlistFile.getPath()+"\""); playlistFileNameTextField.setText(playlistFile.getPath()); playlistFileChooser.setSelectedFile(playlistFile); }
-				if (str.startsWith("texteditor="  )) { texteditorPath  = str.substring("texteditor=" .length()); System.out.println("Found path to text editor in config: \""+texteditorPath+"\""); editConfigButton.setEnabled(true); }
-				if (str.startsWith("filemanager=" )) { filemanagerPath = str.substring("filemanager=".length()); System.out.println("Found path to filemanager in config: \""+filemanagerPath+"\""); gotoETS2fileFolder.setEnabled(true); gotoPlaylistFolder.setEnabled(true); }
+				if (str.startsWith("texteditor="  )) { texteditorPath  = str.substring("texteditor=" .length()); System.out.println("Found path to text editor in config: \""+texteditorPath+"\""); }
+				if (str.startsWith("filemanager=" )) { filemanagerPath = str.substring("filemanager=".length()); System.out.println("Found path to filemanager in config: \""+filemanagerPath+"\""); }
 			}
 		} catch (IOException e1) {}
 		try { input.close(); } catch (IOException e) {}
