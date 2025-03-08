@@ -10,12 +10,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Vector;
@@ -408,7 +404,7 @@ public final class LiveStreamListConverter implements ActionListener {
 				{
 					if ( (valueStr = parseValue(line,"url=" ))!=null ) station.url  = valueStr;
 					if ( (valueStr = parseValue(line,"name="))!=null ) station.name = valueStr;
-					if ( (valueStr = parseValue(line,"type="))!=null ) station.type = valueStr;
+					if ( (valueStr = parseValue(line,"type="))!=null ) station.type = SourceType.parseSourceType(valueStr);
 				}
 			}
 		}
@@ -452,115 +448,6 @@ public final class LiveStreamListConverter implements ActionListener {
 		catch (IOException ex) {
 			System.err.printf("IOException while writing BaseConfig: %s%n", ex.getMessage());
 			//ex.printStackTrace();
-		}
-	}
-	
-	private static class StreamAdress {
-		
-		public String url;
-		public String name;
-		public String genre;
-		public String country;
-		public int bitRate;
-		public int isFavorite;
-
-		public StreamAdress(String name, String url) {
-			this.url = url;
-			this.name = name;
-			this.genre = "";
-			this.country = "";
-			this.bitRate = 0;
-			this.isFavorite = 1;
-		}
-
-		@Override
-		public String toString() {
-			return "StreamAdress [ name=\"" + name + "\", url=\"" + url + "\" ]";
-		}
-		
-	}
-	
-	private static class Station {
-		
-		private String url;
-		private String name;
-		private String type;
-
-		public Station() {
-			url = null;
-			name = null;
-			type = null;
-		}
-
-		@Override
-		public String toString() {
-			return "Station [ name=\"" + name + "\", url=\"" + url + "\", type=\"" + type + "\" ]";
-		}
-		
-		public Vector<StreamAdress> readStreamAdressesFromWeb() {
-			if (url==null) return null;
-			String content = getContent(url);
-			if (content==null) return null;
-			
-			Vector<StreamAdress> adresses = new Vector<>();
-			content.lines().forEach(line -> {
-				if ("plain".equals(type)) {
-					if (isURL(line))
-						adresses.add(
-							new StreamAdress(
-								String.format("%s(%d)",name,adresses.size()+1),
-								line
-							)
-						);
-				} else if ("pls".equals(type)) {
-					if (line.startsWith("File")) {
-						int pos = line.indexOf('=');
-						if (pos>=0)
-							adresses.add(
-								new StreamAdress(
-									String.format("%s(%d)",name,adresses.size()+1),
-									line.substring(pos+1)
-								)
-							);
-					}
-				}
-			});
-			
-			if (adresses.size()==1) adresses.get(0).name = name;
-			return adresses;
-		}
-
-		private boolean isURL(String url) {
-			try {
-				new URI(url).toURL();
-				return true;
-			}
-			catch (URISyntaxException e) { return false; }
-			catch (MalformedURLException e) { return false; }
-		}
-
-		private static String getContent(String url) {
-			Object obj; 
-			try { obj = new URI(url).toURL().getContent(); }
-			catch (URISyntaxException e) { e.printStackTrace(); return null; }
-			catch (MalformedURLException e) { e.printStackTrace(); return null; }
-			catch (IOException e) { e.printStackTrace(); return null; }
-			
-			if (obj==null) return null;
-			if (obj instanceof String str) return str;
-			if (obj instanceof InputStream input) {
-				StringBuilder sb = new StringBuilder();
-				byte[] buffer = new byte[10000];
-				try {
-					int len;
-					while( (len=input.read(buffer))>=0 )
-						sb.append(new String(buffer,0,len));
-				} catch (IOException e) {}
-				try { input.close(); } catch (IOException e) {}
-				return sb.toString();
-			}
-			System.out.println("Unknown content type of station list: "+obj.getClass().getCanonicalName());
-			return null;
 		}
 	}
 }
