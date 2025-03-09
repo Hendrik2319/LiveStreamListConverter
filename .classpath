@@ -8,6 +8,5 @@
 	</classpathentry>
 	<classpathentry combineaccessrules="false" kind="src" path="/JavaLib_Common_Dialogs"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/JavaLib_Common_Essentials"/>
-	<classpathentry combineaccessrules="false" kind="src" path="/JavaLib_Common_GUI"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
