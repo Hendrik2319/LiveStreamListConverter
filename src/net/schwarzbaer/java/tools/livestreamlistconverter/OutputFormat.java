@@ -11,8 +11,9 @@ abstract class OutputFormat
 {
 	enum FormatEnum
 	{
-		ETS2RadioList(ETS2RadioList::new),
-		PLSPlayList  (PLSPlayList  ::new),
+		PLSPlayList         (PLSPlayList         ::new),
+		ETS2RadioList       (ETS2RadioList       ::new),
+		StarTruckerRadioList(StarTruckerRadioList::new),
 		;
 		final Supplier<OutputFormat> create;
 		private FormatEnum(Supplier<OutputFormat> create)
@@ -46,7 +47,7 @@ abstract class OutputFormat
 	{
 		ETS2RadioList()
 		{
-			super("ETS2 Radio List", "SII file(*.sii)","sii");
+			super("ETS2 Radio List", "SII file","sii");
 		}
 		
 		@Override
@@ -70,11 +71,39 @@ abstract class OutputFormat
 		}
 	}
 	
+	static class StarTruckerRadioList extends OutputFormat
+	{
+		StarTruckerRadioList()
+		{
+			super("StarTrucker Radio List", "Text file","txt");
+		}
+		
+		@Override
+		String createOutputFileContent(ProgressDialog pd, Vector<StreamAdress> adressList)
+		{
+			pd.setValue(0, adressList.size());
+			StringBuilder sb = new StringBuilder();
+			sb.append("### Add a custom station on a new line using the following format:\r\n");
+			sb.append("### [url]|[name]|[genre]\r\n");
+			sb.append("http://stream.simulatorradio.com:8002/stream.mp3|SimulatorRadio|Sim radio\r\n");
+			sb.append("http://radio.trucksim.fm:8000/stream|TruckSimFM|Sim radio\r\n");
+			sb.append("https://oreo.truckstopradio.co.uk/radio/8000/radio.mp3|TruckStopRadio|Sim radio\r\n");
+			sb.append("https://radio.truckers.fm|TruckersFM|Sim radio\r\n");
+			sb.append("\r\n");
+			for (int i=0; i<adressList.size(); i++) {
+				StreamAdress adress = adressList.get(i);
+				sb.append("%s|%s|Custom radio\r\n".formatted(adress.url, adress.name));
+				pd.setValue(i+1);
+			}
+			return sb.toString();
+		}
+	}
+	
 	static class PLSPlayList extends OutputFormat
 	{
 		PLSPlayList()
 		{
-			super("PLS PlayList", "PLS file(*.pls)","pls");
+			super("PLS PlayList", "PLS file","pls");
 		}
 		
 		@Override
