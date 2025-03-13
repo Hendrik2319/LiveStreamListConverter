@@ -18,10 +18,12 @@ import java.util.function.BiConsumer;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JPanel;
+import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JToolBar;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
 
@@ -80,7 +82,9 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 	}
 
 	private final StandardMainWindow mainWindow;
+	private final JTabbedPane tabbedPane;
 	private final JTextArea stationListTextArea;
+	private final JScrollPane stationListTextAreaScrollPane;
 	private final Vector<Station> stationList;
 	private final Vector<StreamAdress> adressList;
 	private final Disabler<ActionCommands> disabler;
@@ -111,7 +115,7 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 		
 		stationListTextArea = new JTextArea();
 		stationListTextArea.setEditable(false);
-		JScrollPane stationListTextAreaScrollPane = new JScrollPane(stationListTextArea);
+		stationListTextAreaScrollPane = new JScrollPane(stationListTextArea);
 		stationListTextAreaScrollPane.setBorder(
 				BorderFactory.createCompoundBorder(
 						BorderFactory.createEmptyBorder(2,2,2,2),
@@ -119,12 +123,13 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 				)
 		);
 		
-		JTabbedPane tabbedPane = new JTabbedPane();
+		tabbedPane = new JTabbedPane();
 		tabbedPane.addTab("Input: Station Adresses", stationListTextAreaScrollPane);
 		
 		forEachFormat((fe, outputter) -> {
 			String tabTitle = "Output: %s".formatted(outputter.outputFormat.fileLabel);
-			tabbedPane.addTab( tabTitle, outputter.createPanel(mainWindow) );
+			int tabCount = tabbedPane.getTabCount();
+			tabbedPane.addTab( tabTitle, outputter.createPanel(mainWindow, ()->tabbedPane.getModel().setSelectedIndex(tabCount)) );
 		});
 		
 		JPanel contentPane = new JPanel(new BorderLayout(3,3));
@@ -264,17 +269,22 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 	}
 
 	private void importStationAdressesTask(ProgressDialog pd) {
-		pd.setTaskTitle("Read station list:");
-		pd.setIndeterminate(true);
+		tabbedPane.getModel().setSelectedIndex(0);
+		SwingUtilities.invokeLater(()->{
+			pd.setTaskTitle("Read station list:");
+			pd.setIndeterminate(true);
+		});
 		
 		readStationListFromFile();
 		for(Station station : stationList)
 			System.out.println("station: "+station);
 		
-		pd.setTaskTitle("Import station adresses:");
-		pd.setValue(0, stationList.size());
 		adressList.clear();
-		stationListTextArea.setText("");;
+		SwingUtilities.invokeLater(()->{
+			pd.setTaskTitle("Import station adresses:");
+			pd.setValue(0, stationList.size());
+			stationListTextArea.setText("");;
+		});
 		//for (Station station: stationList) {
 		for (int i=0; (i<stationList.size()) && !pd.wasCanceled(); i++) {
 			Station station = stationList.get(i);
@@ -282,19 +292,39 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 			if (streamAdresses!=null) {
 				adressList.addAll(streamAdresses);
 				System.out.println("station: "+station);
-				stationListTextArea.append(String.format("station: %s\r\n", station.name));
-				stationListTextArea.append(String.format("  list: %s\r\n", station.url));
+				SwingUtilities.invokeLater(()->{
+					stationListTextArea.append(String.format("station: %s\r\n", station.name));
+					stationListTextArea.append(String.format("  list: %s\r\n", station.url));
+				});
 				for (StreamAdress addr: streamAdresses) {
 					System.out.println("\t"+addr);
-					stationListTextArea.append(String.format("    %s\r\n", addr.url));
+					SwingUtilities.invokeLater(()->{
+						stationListTextArea.append(String.format("    %s\r\n", addr.url));
+					});
 				}
+				SwingUtilities.invokeLater(()->{
+					scrolltoEnd(stationListTextAreaScrollPane);
+				});
 			}
-			pd.setValue(i+1);
+			int progress = i+1;
+			SwingUtilities.invokeLater(()->{
+				pd.setValue(progress);
+			});
 		}
 		if (pd.wasCanceled()) {
 			adressList.clear();
-			stationListTextArea.setText("");
+			SwingUtilities.invokeLater(()->{
+				stationListTextArea.setText("");
+			});
 		}
+	}
+
+	static void scrolltoEnd(JScrollPane scrollPane)
+	{
+		JScrollBar vertScrollBar = scrollPane.getVerticalScrollBar();
+		int pos = vertScrollBar.getMaximum()-vertScrollBar.getVisibleAmount();
+		if (pos > vertScrollBar.getMinimum())
+			vertScrollBar.setValue(pos);
 	}
 
 	static String parseValue(String line, String prefix)

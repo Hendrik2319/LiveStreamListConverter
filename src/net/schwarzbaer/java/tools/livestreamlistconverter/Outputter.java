@@ -17,6 +17,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JToolBar;
+import javax.swing.SwingUtilities;
 
 import net.schwarzbaer.java.lib.gui.FileChooser;
 import net.schwarzbaer.java.lib.gui.ProgressDialog;
@@ -36,6 +37,7 @@ class Outputter
 	private final FileChooser fileChooser;
 	private Panel panel;
 	private File outputFile;
+	private Runnable doBeforeGenerating;
 
 	Outputter(BaseConfig baseConfig, OutputFormat outputFormat, ExternalIF externalIF)
 	{
@@ -49,6 +51,7 @@ class Outputter
 		
 		panel = null;
 		outputFile = null;
+		doBeforeGenerating = null;
 	}
 	
 	File getOutputFile()
@@ -68,13 +71,20 @@ class Outputter
 	}
 	
 	void generateAndWriteContentToFile(ProgressDialog pd) {
+		if (doBeforeGenerating!=null)
+			doBeforeGenerating.run();
 		Vector<StreamAdress> adressList = externalIF.getAdressList();
-		pd.setTaskTitle( "Create %s:".formatted( outputFormat.fileLabel ) );
-		String content = outputFormat.createOutputFileContent(pd,adressList);
+		SwingUtilities.invokeLater(()->{
+			pd.setTaskTitle( "Create %s:".formatted( outputFormat.fileLabel ) );
+			pd.setValue(0, adressList.size());
+		});
+		String content = outputFormat.createOutputFileContent(adressList, progress -> SwingUtilities.invokeLater( () -> pd.setValue(progress) ));
 		if (outputFile!=null)
 			writeContentTo( content, outputFile );
 		if (panel!=null)
-			panel.contentTextArea.setText(content);
+			SwingUtilities.invokeLater(()->{
+				panel.contentTextArea.setText(content);
+			});
 	}
 
 	private static void writeContentTo(String content, File outputFile) {
@@ -88,8 +98,9 @@ class Outputter
 		}
 	}
 	
-	Panel createPanel(Window parent)
+	Panel createPanel(Window parent, Runnable doBeforeGenerating)
 	{
+		this.doBeforeGenerating = doBeforeGenerating;
 		return panel = new Panel(parent);
 	}
 	
