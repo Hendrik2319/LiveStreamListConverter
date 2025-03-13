@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -11,7 +12,9 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.Vector;
 import java.util.function.BiConsumer;
 
@@ -86,6 +89,7 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 	private final JTextArea stationListTextArea;
 	private final JScrollPane stationListTextAreaScrollPane;
 	private final Vector<Station> stationList;
+	private final Set<String> ignoredStreamURLs;
 	private final Vector<StreamAdress> adressList;
 	private final Disabler<ActionCommands> disabler;
 	private final Map<FormatEnum, Outputter> outputerMap;
@@ -95,6 +99,7 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 	{
 		stationList = new Vector<>();
 		adressList = new Vector<>();
+		ignoredStreamURLs = new HashSet<>();
 		
 		outputerMap = new EnumMap<>(FormatEnum.class);
 		baseConfig = new BaseConfig(this);
@@ -275,10 +280,13 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 			pd.setIndeterminate(true);
 		});
 		
+		System.out.println();
 		readStationListFromFile();
 		for(Station station : stationList)
-			System.out.println("station: "+station);
+			System.out.printf("station: %s%n", station);
 		
+		System.out.println();
+		System.out.println("Import station adresses ...");
 		adressList.clear();
 		SwingUtilities.invokeLater(()->{
 			pd.setTaskTitle("Import station adresses:");
@@ -290,16 +298,18 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 			Station station = stationList.get(i);
 			Vector<StreamAdress> streamAdresses = station.readStreamAdressesFromWeb();
 			if (streamAdresses!=null) {
-				adressList.addAll(streamAdresses);
-				System.out.println("station: "+station);
+				System.out.printf("station: %s%n", station);
 				SwingUtilities.invokeLater(()->{
 					stationListTextArea.append(String.format("station: %s\r\n", station.name));
 					stationListTextArea.append(String.format("  list: %s\r\n", station.url));
 				});
 				for (StreamAdress addr: streamAdresses) {
-					System.out.println("\t"+addr);
+					boolean ignored = ignoredStreamURLs.contains(addr.url);
+					if (!ignored) adressList.add(addr);
+					String ignoredStr = ignored ? "[IGNORED] " : "";
+					System.out.printf("\t%s%s%n", ignoredStr, addr);
 					SwingUtilities.invokeLater(()->{
-						stationListTextArea.append(String.format("    %s\r\n", addr.url));
+						stationListTextArea.append(String.format("    %s%s%n", ignoredStr, addr.url));
 					});
 				}
 				SwingUtilities.invokeLater(()->{
@@ -336,19 +346,38 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 
 	private void readStationListFromFile()
 	{
+		File file = new File(FILENAME_STATIONS_LIST);
+		System.out.printf("Read StationList from file \"%s\" ...%n", file.getAbsolutePath());
 		stationList.clear();
-		try (BufferedReader input = new BufferedReader( new InputStreamReader(new FileInputStream(FILENAME_STATIONS_LIST), StandardCharsets.UTF_8)))
+		ignoredStreamURLs.clear();
+		try (BufferedReader input = new BufferedReader( new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)))
 		{
 			String line, valueStr;
 			Station station = null;
+			boolean inIgnoredStreamURLsSection = false;
 			while( (line=input.readLine())!=null )
 			{
-				if (line.toLowerCase().equals("[station]")) stationList.add(station = new Station());
+				if (line.toLowerCase().equals("[station]"))
+				{
+					stationList.add(station = new Station());
+					inIgnoredStreamURLsSection = false;
+				}
+				if (line.toLowerCase().equals("[ignoredstreamurls]"))
+				{
+					station = null;
+					inIgnoredStreamURLsSection = true;
+				}
+				
 				if (station!=null)
 				{
 					if ( (valueStr = parseValue(line,"url=" ))!=null ) station.url  = valueStr;
 					if ( (valueStr = parseValue(line,"name="))!=null ) station.name = valueStr;
 					if ( (valueStr = parseValue(line,"type="))!=null ) station.type = SourceType.parseSourceType(valueStr);
+				}
+				
+				if (inIgnoredStreamURLsSection)
+				{
+					if ( (valueStr = parseValue(line,"url=" ))!=null ) ignoredStreamURLs.add(valueStr);
 				}
 			}
 		}
@@ -357,5 +386,6 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 			System.err.printf("IOException while reading StationList: %s%n", ex.getMessage());
 			//ex.printStackTrace();
 		}
+		System.out.println("... done");
 	}
 }
