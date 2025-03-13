@@ -1,7 +1,9 @@
 package net.schwarzbaer.java.tools.livestreamlistconverter;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -49,21 +51,23 @@ class Station
 		
 		if (obj==null) return null;
 		if (obj instanceof String str) return str;
-		if (obj instanceof InputStream input)
+		if (obj instanceof InputStream input) return readFromInputStream(input);
+		
+		System.err.printf("Unknown content type of station list: %s%n", obj.getClass().getCanonicalName());
+		return null;
+	}
+
+	private static String readFromInputStream(InputStream input)
+	{
+		try (BufferedReader in = new BufferedReader(new InputStreamReader(input)))
 		{
-			StringBuilder sb = new StringBuilder();
-			byte[] buffer = new byte[10000];
-			try
-			{
-				int len;
-				while( (len=input.read(buffer))>=0 )
-					sb.append(new String(buffer,0,len));
-			}
-			catch (IOException e) {}
-			try { input.close(); } catch (IOException e) {}
-			return sb.toString();
+			return in.lines().reduce("", (content, line) -> "%s%s%n".formatted(content, line));
 		}
-		System.out.println("Unknown content type of station list: "+obj.getClass().getCanonicalName());
+		catch (IOException ex)
+		{
+			System.err.printf("IOException while reading response from station: %s%n", ex.getMessage());
+			//ex.printStackTrace();
+		}
 		return null;
 	}
 }
