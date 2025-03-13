@@ -80,7 +80,7 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 	
 	enum ActionCommands
 	{
-		ImportStationAdresses, EditConfigFiles, GenerateAllFiles,
+		ImportStationAdresses, EditConfigFiles, GenerateAllFiles, Config,
 	}
 
 	private final StandardMainWindow mainWindow;
@@ -115,8 +115,10 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 		toolBar.setFloatable(false);
 		
 		toolBar.add(createButton("import station adresses", ActionCommands.ImportStationAdresses));
-		toolBar.add(createButton("edit config files", baseConfig.texteditorPath!=null, ActionCommands.EditConfigFiles));
 		toolBar.add(createButton("Generate All Files", GrayCommandIcons.IconGroup.Save , ActionCommands.GenerateAllFiles));
+		toolBar.addSeparator();
+		toolBar.add(createButton("Edit config files", baseConfig.texteditorPath!=null, ActionCommands.EditConfigFiles));
+		toolBar.add(createButton("Config", ActionCommands.Config));
 		
 		stationListTextArea = new JTextArea();
 		stationListTextArea.setEditable(false);
@@ -262,6 +264,11 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 				enableGUI(true);
 			} );
 			break;
+			
+		case Config:
+			BaseConfigDialog.showDialog(mainWindow, baseConfig);
+			updateGUIAccess();
+			break;
 		}
 	}
 
@@ -272,7 +279,7 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 			outputter.setPanelEnabled(enable);
 		});
 		disabler.setEnable(ac ->  switch (ac) {
-			case ImportStationAdresses, GenerateAllFiles
+			case ImportStationAdresses, GenerateAllFiles, Config
 				-> enable;
 				
 			case EditConfigFiles

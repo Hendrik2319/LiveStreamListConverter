@@ -39,7 +39,7 @@ class BaseConfig
 					if ( (pathStr = LiveStreamListConverter.parseValue( line_, prefix ))!=null )
 					{
 						File outputFile = new File(pathStr);
-						System.out.printf("Found predefined %s file in config: \"%s\"%n", outputter.outputFormat.fileLabel, outputFile.getAbsolutePath());
+						System.out.printf("Found path to %s file in config: \"%s\"%n", outputter.outputFormat.fileLabel, outputFile.getAbsolutePath());
 						outputter.setOutputFile( outputFile );
 					}
 				});
