@@ -1,6 +1,7 @@
 package net.schwarzbaer.java.tools.livestreamlistconverter;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
@@ -17,15 +18,19 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JToolBar;
+import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
@@ -34,16 +39,10 @@ import net.schwarzbaer.java.lib.gui.Disabler;
 import net.schwarzbaer.java.lib.gui.GeneralIcons.GrayCommandIcons;
 import net.schwarzbaer.java.lib.gui.ProgressDialog;
 import net.schwarzbaer.java.lib.gui.StandardMainWindow;
+import net.schwarzbaer.java.lib.gui.Tables;
 import net.schwarzbaer.java.tools.livestreamlistconverter.OutputFormat.FormatEnum;
 
 public final class LiveStreamListConverter implements ActionListener, BaseConfig.ExternalIF, Outputter.ExternalIF {
-	
-	// http://yp.shoutcast.com/sbin/tunein-station.pls?id=709938   [ DigitalGunfire.com ]
-	// http://yp.shoutcast.com/sbin/tunein-station.pls?id=1591787  Sanctuary Radio
-	// http://yp.shoutcast.com/sbin/tunein-station.pls?id=359487   -=- tormented radio -=-
-	// http://yp.shoutcast.com/sbin/tunein-station.pls?id=180864   -=RantRadio Industrial=-
-	// http://yp.shoutcast.com/sbin/tunein-station.pls?id=56499    sdx's synthetic experience!
-	// http://yp.shoutcast.com/sbin/tunein-station.pls?id=560047   : ampedOut :
 	
 	static final String FILENAME_BASECONFIG    = "LiveStreamListConverter.FileLocations.cfg";
 	static final String FILENAME_STATIONS_LIST = "LiveStreamListConverter.KnownStations.cfg";
@@ -88,6 +87,7 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 	private final JTabbedPane tabbedPane;
 	private final JTextArea stationListTextArea;
 	private final JScrollPane stationListTextAreaScrollPane;
+	private final JList<Station> stationResponsesStationList;
 	private final Vector<Station> stationList;
 	private final Set<String> ignoredStreamURLs;
 	private final Vector<StreamAdress> adressList;
@@ -128,8 +128,41 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 				)
 		);
 		
+		JTextArea stationResponsesOutput = new JTextArea();
+		stationResponsesOutput.setEditable(false);
+		stationResponsesOutput.setLineWrap(false);
+		
+		Color stationWithNoResponse = new Color(0xf0f0f0);
+		Function<Object, String> strConverter = obj -> obj instanceof Station station ? station.name : obj.toString();
+		Function<Object, Color> colorizer = obj -> obj instanceof Station station && station.stationResponse==null ? stationWithNoResponse : null;
+		Tables.NonStringRenderer<Station> renderer = new Tables.NonStringRenderer<>(strConverter);
+		renderer.setBackgroundColorizer(colorizer);
+		
+		stationResponsesStationList = new JList<>(stationList);
+		stationResponsesStationList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		stationResponsesStationList.setCellRenderer(renderer);
+		stationResponsesStationList.addListSelectionListener(ev -> {
+			int index = stationResponsesStationList.getSelectedIndex();
+			Station station = index<0 || index>=stationList.size() ? null : stationList.get(index);
+			if (station==null)
+			{
+				stationResponsesOutput.setText("<no station selected>");
+				return;
+			}
+			String stationResponse = station.stationResponse;
+			if (stationResponse==null)
+				stationResponsesOutput.setText("<received no response from station>");
+			else
+				stationResponsesOutput.setText(stationResponse);
+		});
+		
+		JSplitPane stationResponsesPanel = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, true);
+		stationResponsesPanel.setLeftComponent(new JScrollPane(stationResponsesStationList));
+		stationResponsesPanel.setRightComponent(new JScrollPane(stationResponsesOutput));
+		
 		tabbedPane = new JTabbedPane();
 		tabbedPane.addTab("Input: Station Adresses", stationListTextAreaScrollPane);
+		tabbedPane.addTab("Input: Station Responses", stationResponsesPanel);
 		
 		forEachFormat((fe, outputter) -> {
 			String tabTitle = "Output: %s".formatted(outputter.outputFormat.fileLabel);
@@ -327,6 +360,7 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 				stationListTextArea.setText("");
 			});
 		}
+		stationResponsesStationList.setListData(stationList);
 	}
 
 	static void scrolltoEnd(JScrollPane scrollPane)

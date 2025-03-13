@@ -13,6 +13,7 @@ class Station
 	String url = null;
 	String name = null;
 	SourceType type = null;
+	String stationResponse = null;
 
 	@Override
 	public String toString()
@@ -23,11 +24,11 @@ class Station
 	Vector<StreamAdress> readStreamAdressesFromWeb()
 	{
 		if (url==null) return null;
-		String content = getContent(url);
-		if (content==null) return null;
+		stationResponse = getContent(url);
+		if (stationResponse==null) return null;
 		
 		Vector<StreamAdress> adresses = new Vector<>();
-		content.lines().forEach(line -> {
+		stationResponse.lines().forEach(line -> {
 			String label = String.format("%s(%d)", name, adresses.size()+1);
 			StreamAdress streamAdress = type==null ? null : type.parser.parseLine(line, label);
 			if (streamAdress!=null)
