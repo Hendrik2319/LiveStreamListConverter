@@ -1,13 +1,15 @@
 package net.schwarzbaer.java.tools.livestreamlistconverter;
 
 import java.awt.BorderLayout;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Window;
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Objects;
 import java.util.Vector;
+import java.util.function.Consumer;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -20,8 +22,8 @@ import javax.swing.JToolBar;
 import javax.swing.SwingUtilities;
 
 import net.schwarzbaer.java.lib.gui.FileChooser;
-import net.schwarzbaer.java.lib.gui.ProgressDialog;
 import net.schwarzbaer.java.lib.gui.GeneralIcons.GrayCommandIcons;
+import net.schwarzbaer.java.lib.gui.ProgressDialog;
 
 class Outputter
 {
@@ -35,9 +37,9 @@ class Outputter
 	private final BaseConfig baseConfig;
 	        final OutputFormat outputFormat;
 	private final FileChooser fileChooser;
-	private Panel panel;
-	private File outputFile;
-	private Runnable doBeforeGenerating;
+	private       Panel panel;
+	private final Vector<File> outputFiles;
+	private       Runnable doBeforeGenerating;
 
 	Outputter(BaseConfig baseConfig, OutputFormat outputFormat, ExternalIF externalIF)
 	{
@@ -50,22 +52,23 @@ class Outputter
 		);
 		
 		panel = null;
-		outputFile = null;
+		outputFiles = new Vector<>();
 		doBeforeGenerating = null;
 	}
 	
-	File getOutputFile()
+	void forEachOutputFile(Consumer<File> action)
 	{
-		return outputFile;
+		outputFiles.forEach(action);
 	}
-
-	void setOutputFile(File outputFile)
+	
+	void addOutputFile(File outputFile)
 	{
-		this.outputFile = outputFile;
-		fileChooser.setSelectedFile(this.outputFile);
+		if (outputFile==null) return;
+		outputFiles.add(outputFile);
+		fileChooser.setSelectedFile(outputFile);
 		if (panel!=null)
 		{
-			panel.fileField.setText(this.outputFile==null ? "" : this.outputFile.getAbsolutePath());
+			panel.updateFileFields();
 			panel.setEnabled(true);
 		}
 	}
@@ -79,8 +82,7 @@ class Outputter
 			pd.setValue(0, adressList.size());
 		});
 		String content = outputFormat.createOutputFileContent(adressList, progress -> SwingUtilities.invokeLater( () -> pd.setValue(progress) ));
-		if (outputFile!=null)
-			writeContentTo( content, outputFile );
+		outputFiles.forEach( outputFile -> writeContentTo( content, outputFile ) );
 		if (panel!=null)
 			SwingUtilities.invokeLater(()->{
 				panel.contentTextArea.setText(content);
@@ -114,19 +116,17 @@ class Outputter
 	{
 		private static final long serialVersionUID = 2132641733100889592L;
 		
-		private final JTextField fileField;
+		private final JPanel fileFieldsPanel;
 		private final JTextArea contentTextArea;
-		private final JButton btnSetOutputFile;
-		private final JButton btnOpenFolder;
+		private final JButton btnAddOutputFile;
+		private final Vector<JButton> btnArrOpenFolder;
+		private final Vector<JButton> btnArrRemoveFile;
 		private final JButton btnWriteContentToFile;
 		
 		Panel(Window parent)
 		{
 			super(new BorderLayout(2,2));
 			setBorder(BorderFactory.createEmptyBorder(2,2,2,2));
-			
-			fileField = new JTextField( outputFile==null ? "" : outputFile.getAbsolutePath() );
-			fileField.setEditable(false);
 			
 			contentTextArea = new JTextArea();
 			contentTextArea.setEditable(false);
@@ -135,21 +135,12 @@ class Outputter
 			JToolBar toolBar = new JToolBar();
 			toolBar.setFloatable(false);
 			
-			toolBar.add(btnSetOutputFile = LiveStreamListConverter.createButton("Set Output File", e->{
+			toolBar.add(btnAddOutputFile = LiveStreamListConverter.createButton("Add Output File", e->{
 				if (fileChooser.showSaveDialog(parent)==JFileChooser.APPROVE_OPTION) {
-					outputFile = fileChooser.getSelectedFile();
-					fileField.setText( outputFile.getAbsolutePath() );
+					File outputFile = fileChooser.getSelectedFile();
+					outputFiles.add(outputFile);
+					updateFileFields();
 					baseConfig.writeToFile();
-				}
-			}));
-			
-			toolBar.add(btnOpenFolder = LiveStreamListConverter.createButton("Open Folder", GrayCommandIcons.IconGroup.Folder, e->{
-				if (baseConfig.filemanagerPath!=null && outputFile!=null) {
-					try {
-						LiveStreamListConverter.execute( baseConfig.filemanagerPath, outputFile.getParent() );
-					} catch (IOException e1) {
-						e1.printStackTrace();
-					}
 				}
 			}));
 			
@@ -160,16 +151,52 @@ class Outputter
 					externalIF.enableGUI(true);
 				});
 			}));
+			
+			btnArrOpenFolder = new Vector<>();
+			btnArrRemoveFile = new Vector<>();
+			fileFieldsPanel = new JPanel(new GridBagLayout());
 
 			JPanel centerPanel = new JPanel(new BorderLayout(2,2));
-			centerPanel.add(fileField, BorderLayout.NORTH);
+			centerPanel.add(fileFieldsPanel, BorderLayout.NORTH);
 			centerPanel.add(contentTextAreaScrollPane, BorderLayout.CENTER);
 			
 			add(toolBar, BorderLayout.PAGE_START);
 			add(centerPanel, BorderLayout.CENTER);
+			updateFileFields();
 			updateGuiAccess();
 		}
 		
+		void updateFileFields()
+		{
+			fileFieldsPanel.removeAll();
+			btnArrOpenFolder.clear();
+			btnArrRemoveFile.clear();
+			
+			GridBagConstraints c = new GridBagConstraints();
+			c.fill = GridBagConstraints.BOTH;
+			c.gridwidth = 1;
+			c.gridheight = 1;
+			c.weightx = 0;
+			c.weighty = 0;
+			c.gridy = -1;
+			
+			outputFiles.forEach( outputFile -> {
+				JTextField fileField = new JTextField( outputFile.getAbsolutePath() );
+				fileField.setEditable(false);
+				
+				JButton openFolderBtn = LiveStreamListConverter.createButton("Open Folder", GrayCommandIcons.IconGroup.Folder, e -> {});
+				JButton removeFileBtn = LiveStreamListConverter.createButton("Remove File", GrayCommandIcons.IconGroup.Delete, e -> {});
+				btnArrOpenFolder.add(openFolderBtn);
+				btnArrRemoveFile.add(removeFileBtn);
+				
+				c.gridy++;
+				c.gridx = -1;
+				c.gridx++; c.weightx = 1; fileFieldsPanel.add(fileField, c);
+				c.gridx++; c.weightx = 0; fileFieldsPanel.add(openFolderBtn, c);
+				c.gridx++; c.weightx = 0; fileFieldsPanel.add(removeFileBtn, c);
+			} );
+		}
+
 		void updateGuiAccess()
 		{
 			setEnabled(isEnabled());
@@ -179,11 +206,10 @@ class Outputter
 		public void setEnabled(boolean enabled)
 		{
 			super.setEnabled(enabled);
-			btnSetOutputFile     .setEnabled(enabled);
-			btnOpenFolder        .setEnabled(enabled && baseConfig.filemanagerPath!=null && outputFile!=null);
+			btnAddOutputFile     .setEnabled(enabled);
+			btnArrOpenFolder.forEach( btn -> btn.setEnabled(enabled && baseConfig.filemanagerPath!=null) );
+			btnArrRemoveFile.forEach( btn -> btn.setEnabled(enabled) );
 			btnWriteContentToFile.setEnabled(enabled);
 		}
-		
-		
 	}
 }

@@ -40,7 +40,7 @@ class BaseConfig
 					{
 						File outputFile = new File(pathStr);
 						System.out.printf("Found path to %s file in config: \"%s\"%n", outputter.outputFormat.fileLabel, outputFile.getAbsolutePath());
-						outputter.setOutputFile( outputFile );
+						outputter.addOutputFile( outputFile );
 					}
 				});
 				//if ( (valueStr = LiveStreamListConverter.parseValue(line,"ets2listFile="))!=null ) { ets2listFile    = new File(valueStr); System.out.println("Found predefined ets2list file in config: \""+ets2listFile.getPath()+"\""); ets2listFileNameTextField.setText(ets2listFile.getPath()); ets2listFileChooser.setSelectedFile(ets2listFile); }
@@ -61,9 +61,9 @@ class BaseConfig
 		try (PrintWriter output = new PrintWriter(LiveStreamListConverter.FILENAME_BASECONFIG, StandardCharsets.UTF_8))
 		{
 			externalIF.forEachFormat((fe, outputter) -> {
-				File outputFile = outputter.getOutputFile();
-				if (outputFile!=null)
+				outputter.forEachOutputFile( outputFile -> {
 					output.printf("outputFile.%s=%s%n", fe, outputFile.getAbsolutePath());
+				} );
 			});
 			//if (ets2listFile   !=null) output.println("ets2listFile="+ets2listFile.getPath());
 			//if (playlistFile   !=null) output.println("playlistFile="+playlistFile.getPath());
