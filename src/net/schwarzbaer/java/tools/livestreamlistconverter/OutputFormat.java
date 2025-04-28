@@ -11,6 +11,7 @@ abstract class OutputFormat
 	enum FormatEnum
 	{
 		PLSPlayList         (PLSPlayList         ::new),
+		M3UPlayList         (M3UPlayList         ::new),
 		ETS2RadioList       (ETS2RadioList       ::new),
 		StarTruckerRadioList(StarTruckerRadioList::new),
 		;
@@ -117,6 +118,28 @@ abstract class OutputFormat
 				setProgress.accept(i+1);
 			}
 			sb.append("Version=2").append("\r\n");
+			return sb.toString();
+		}
+	}
+	
+	static class M3UPlayList extends OutputFormat
+	{
+		M3UPlayList()
+		{
+			super("M3U PlayList", "M3U file","m3u");
+		}
+		
+		@Override
+		String createOutputFileContent(Vector<StreamAdress> adressList, IntConsumer setProgress)
+		{
+			StringBuilder sb = new StringBuilder();
+			sb.append(String.format("#EXTM3U%n"));
+			for (int i=0; i<adressList.size(); i++) {
+				StreamAdress adress = adressList.get(i);
+				sb.append(String.format("#EXTINF:0,%s%n", adress.name));
+				sb.append(String.format("%s%n", adress.url));
+				setProgress.accept(i+1);
+			}
 			return sb.toString();
 		}
 	}

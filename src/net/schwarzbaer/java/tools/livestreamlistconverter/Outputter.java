@@ -6,6 +6,7 @@ import java.awt.GridBagLayout;
 import java.awt.Window;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Objects;
 import java.util.Vector;
@@ -162,10 +163,27 @@ class Outputter
 			
 			add(toolBar, BorderLayout.PAGE_START);
 			add(centerPanel, BorderLayout.CENTER);
+			
 			updateFileFields();
-			updateGuiAccess();
 		}
 		
+		void openFolder(File outputFile) {
+			if (baseConfig.filemanagerPath!=null && outputFile!=null) {
+				try {
+					LiveStreamListConverter.execute( baseConfig.filemanagerPath, outputFile.getParent() );
+				} catch (IOException e1) {
+					e1.printStackTrace();
+				}
+			}
+		}
+		
+		void removeFile(File outputFile)
+		{
+			outputFiles.remove(outputFile);
+			updateFileFields();
+			baseConfig.writeToFile();
+		}
+
 		void updateFileFields()
 		{
 			fileFieldsPanel.removeAll();
@@ -184,8 +202,8 @@ class Outputter
 				JTextField fileField = new JTextField( outputFile.getAbsolutePath() );
 				fileField.setEditable(false);
 				
-				JButton openFolderBtn = LiveStreamListConverter.createButton("Open Folder", GrayCommandIcons.IconGroup.Folder, e -> {});
-				JButton removeFileBtn = LiveStreamListConverter.createButton("Remove File", GrayCommandIcons.IconGroup.Delete, e -> {});
+				JButton openFolderBtn = LiveStreamListConverter.createButton("Open Folder", GrayCommandIcons.IconGroup.Folder, e -> openFolder(outputFile));
+				JButton removeFileBtn = LiveStreamListConverter.createButton("Remove File", GrayCommandIcons.IconGroup.Delete, e -> removeFile(outputFile));
 				btnArrOpenFolder.add(openFolderBtn);
 				btnArrRemoveFile.add(removeFileBtn);
 				
@@ -195,10 +213,8 @@ class Outputter
 				c.gridx++; c.weightx = 0; fileFieldsPanel.add(openFolderBtn, c);
 				c.gridx++; c.weightx = 0; fileFieldsPanel.add(removeFileBtn, c);
 			} );
-		}
-
-		void updateGuiAccess()
-		{
+			revalidate();
+			repaint();
 			setEnabled(isEnabled());
 		}
 		
@@ -209,7 +225,7 @@ class Outputter
 			btnAddOutputFile     .setEnabled(enabled);
 			btnArrOpenFolder.forEach( btn -> btn.setEnabled(enabled && baseConfig.filemanagerPath!=null) );
 			btnArrRemoveFile.forEach( btn -> btn.setEnabled(enabled) );
-			btnWriteContentToFile.setEnabled(enabled);
+			btnWriteContentToFile.setEnabled(enabled && !outputFiles.isEmpty());
 		}
 	}
 }
