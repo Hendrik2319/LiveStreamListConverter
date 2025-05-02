@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -23,6 +24,41 @@ class StationList
 	boolean isIgnoredStreamURL(String url)
 	{
 		return ignoredStreamURLs.contains(url);
+	}
+
+	Integer decreaseIndexOfStation(int index)
+	{
+		if (0<index && index<stationList.size())
+		{
+			Station station = stationList.get(index);
+			stationList.removeElementAt(index);
+			stationList.insertElementAt(station, index-1);
+			return index-1;
+		}
+		return null;
+	}
+
+	Integer increaseIndexOfStation(int index)
+	{
+		if (0<=index && index+1<stationList.size())
+		{
+			Station station = stationList.get(index);
+			stationList.removeElementAt(index);
+			stationList.insertElementAt(station, index+1);
+			return index+1;
+		}
+		return null;
+	}
+
+	void deleteStations(int[] indexes)
+	{
+		Arrays.sort(indexes);
+		for (int i=indexes.length-1; i>=0; i--)
+		{
+			int index = indexes[i];
+			if (0<=index && index<stationList.size())
+				stationList.removeElementAt(index);
+		}
 	}
 
 	void setStationsInList(JList<Station> list)
@@ -43,6 +79,13 @@ class StationList
 	Station getStation(int index)
 	{
 		return index<0 || index>=stationList.size() ? null : stationList.get(index);
+	}
+
+	Station addNewStation()
+	{
+		Station station = new Station();
+		stationList.add(station);
+		return station;
 	}
 
 	interface ForEachStationAction

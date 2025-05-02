@@ -86,6 +86,8 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 	private final Map<FormatEnum, Outputter> outputerMap;
 	private final BaseConfig baseConfig;
 	private final StationList stationList;
+	private final int tabIndexStationAdresses;
+	private final StationListTable stationListTable;
 	
 	public LiveStreamListConverter()
 	{
@@ -157,6 +159,8 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 		stationResponsesPanel.setRightComponent(new JScrollPane(stationResponsesOutput));
 		
 		tabbedPane = new JTabbedPane();
+		tabbedPane.addTab("Input: Stations", stationListTable = new StationListTable(mainWindow, stationList, this::readStationListFromFile));
+		tabIndexStationAdresses = tabbedPane.getTabCount();
 		tabbedPane.addTab("Input: Station Adresses", stationListTextAreaScrollPane);
 		tabbedPane.addTab("Input: Station Responses", stationResponsesPanel);
 		
@@ -171,7 +175,7 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 		contentPane.add(toolBar,BorderLayout.PAGE_START);
 		contentPane.add(tabbedPane,BorderLayout.CENTER);
 		
-		mainWindow.startGUI(contentPane, 800,800);
+		mainWindow.startGUI(contentPane, 1000,800);
 		//mainWindow.setSizeAsMinSize();
 	}
 
@@ -269,6 +273,7 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 	@Override
 	public void enableGUI(boolean enable)
 	{
+		stationListTable.setEnabled(enable);
 		forEachFormat((fe, outputter) -> {
 			outputter.setPanelEnabled(enable);
 		});
@@ -314,10 +319,11 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 	{
 		stationList.readFromFile();
 		stationList.setStationsInList(stationResponsesStationList);
+		stationListTable.updateTable();
 	}
 
 	private void importStationAdressesTask(ProgressDialog pd) {
-		tabbedPane.getModel().setSelectedIndex(0);
+		tabbedPane.getModel().setSelectedIndex(tabIndexStationAdresses);
 		
 		System.out.println();
 		stationList.forEachStation((index,station) -> {
