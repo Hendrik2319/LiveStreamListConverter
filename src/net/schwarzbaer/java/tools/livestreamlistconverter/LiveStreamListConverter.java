@@ -4,18 +4,10 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.EnumMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.Vector;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -53,6 +45,7 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 		
 		final LiveStreamListConverter converter = new LiveStreamListConverter();
 		converter.baseConfig.readFromFile();
+		converter.readStationListFromFile();
 		converter.updateGUIAccess();
 		
 		boolean flag_automatic = false;
@@ -88,18 +81,16 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 	private final JTextArea stationListTextArea;
 	private final JScrollPane stationListTextAreaScrollPane;
 	private final JList<Station> stationResponsesStationList;
-	private final Vector<Station> stationList;
-	private final Set<String> ignoredStreamURLs;
 	private final Vector<StreamAdress> adressList;
 	private final Disabler<ActionCommands> disabler;
 	private final Map<FormatEnum, Outputter> outputerMap;
 	private final BaseConfig baseConfig;
+	private final StationList stationList;
 	
 	public LiveStreamListConverter()
 	{
-		stationList = new Vector<>();
 		adressList = new Vector<>();
-		ignoredStreamURLs = new HashSet<>();
+		stationList = new StationList();
 		
 		outputerMap = new EnumMap<>(FormatEnum.class);
 		baseConfig = new BaseConfig(this);
@@ -114,10 +105,10 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 		JToolBar toolBar = new JToolBar();
 		toolBar.setFloatable(false);
 		
-		toolBar.add(createButton("import station adresses", ActionCommands.ImportStationAdresses));
+		toolBar.add(createButton("Import Station Adresses", ActionCommands.ImportStationAdresses));
 		toolBar.add(createButton("Generate All Files", GrayCommandIcons.IconGroup.Save , ActionCommands.GenerateAllFiles));
 		toolBar.addSeparator();
-		toolBar.add(createButton("Edit config files", baseConfig.texteditorPath!=null, ActionCommands.EditConfigFiles));
+		toolBar.add(createButton("Edit Config Files", baseConfig.texteditorPath!=null, ActionCommands.EditConfigFiles));
 		toolBar.add(createButton("Config", ActionCommands.Config));
 		
 		stationListTextArea = new JTextArea();
@@ -140,15 +131,18 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 		Tables.NonStringRenderer<Station> renderer = new Tables.NonStringRenderer<>(strConverter);
 		renderer.setBackgroundColorizer(colorizer);
 		
-		stationResponsesStationList = new JList<>(stationList);
+		stationResponsesStationList = new JList<>();
 		stationResponsesStationList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		stationResponsesStationList.setCellRenderer(renderer);
 		stationResponsesStationList.addListSelectionListener(ev -> {
 			int index = stationResponsesStationList.getSelectedIndex();
-			Station station = index<0 || index>=stationList.size() ? null : stationList.get(index);
+			Station station = stationList.getStation(index);
 			if (station==null)
 			{
-				stationResponsesOutput.setText("<no station selected>");
+				if (index<0)
+					stationResponsesOutput.setText("<no station selected>");
+				else
+					stationResponsesOutput.setText("<unexpected NULL station>");
 				return;
 			}
 			String stationResponse = station.stationResponse;
@@ -279,7 +273,10 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 			outputter.setPanelEnabled(enable);
 		});
 		disabler.setEnable(ac ->  switch (ac) {
-			case ImportStationAdresses, GenerateAllFiles, Config
+			case ImportStationAdresses, GenerateAllFiles
+				-> enable && stationList.hasStations();
+			
+			case Config
 				-> enable;
 				
 			case EditConfigFiles
@@ -313,29 +310,31 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 		}
 	}
 
+	private void readStationListFromFile()
+	{
+		stationList.readFromFile();
+		stationList.setStationsInList(stationResponsesStationList);
+	}
+
 	private void importStationAdressesTask(ProgressDialog pd) {
 		tabbedPane.getModel().setSelectedIndex(0);
-		SwingUtilities.invokeLater(()->{
-			pd.setTaskTitle("Read station list:");
-			pd.setIndeterminate(true);
-		});
 		
 		System.out.println();
-		readStationListFromFile();
-		for(Station station : stationList)
+		stationList.forEachStation((index,station) -> {
 			System.out.printf("station: %s%n", station);
+			return true;
+		});
 		
 		System.out.println();
 		System.out.println("Import station adresses ...");
 		adressList.clear();
 		SwingUtilities.invokeLater(()->{
 			pd.setTaskTitle("Import station adresses:");
-			pd.setValue(0, stationList.size());
+			pd.setValue(0, stationList.getStationCount());
 			stationListTextArea.setText("");;
 		});
-		//for (Station station: stationList) {
-		for (int i=0; (i<stationList.size()) && !pd.wasCanceled(); i++) {
-			Station station = stationList.get(i);
+		stationList.forEachStation((index,station) -> {
+			if (pd.wasCanceled()) return false;
 			Vector<StreamAdress> streamAdresses = station.readStreamAdressesFromWeb();
 			if (streamAdresses!=null) {
 				System.out.printf("station: %s%n", station);
@@ -344,7 +343,7 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 					stationListTextArea.append(String.format("  list: %s\r\n", station.url));
 				});
 				for (StreamAdress addr: streamAdresses) {
-					boolean ignored = ignoredStreamURLs.contains(addr.url);
+					boolean ignored = stationList.isIgnoredStreamURL(addr.url);
 					if (!ignored) adressList.add(addr);
 					String ignoredStr = ignored ? "[IGNORED] " : "";
 					System.out.printf("\t%s%s%n", ignoredStr, addr);
@@ -356,18 +355,18 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 					scrolltoEnd(stationListTextAreaScrollPane);
 				});
 			}
-			int progress = i+1;
+			int progress = index+1;
 			SwingUtilities.invokeLater(()->{
 				pd.setValue(progress);
 			});
-		}
+			return !pd.wasCanceled();
+		});
 		if (pd.wasCanceled()) {
 			adressList.clear();
 			SwingUtilities.invokeLater(()->{
 				stationListTextArea.setText("");
 			});
 		}
-		stationResponsesStationList.setListData(stationList);
 	}
 
 	static void scrolltoEnd(JScrollPane scrollPane)
@@ -383,50 +382,5 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 		if (line.startsWith(prefix))
 			return line.substring(prefix.length());
 		return null;
-	}
-
-	private void readStationListFromFile()
-	{
-		File file = new File(FILENAME_STATIONS_LIST);
-		System.out.printf("Read StationList from file \"%s\" ...%n", file.getAbsolutePath());
-		stationList.clear();
-		ignoredStreamURLs.clear();
-		try (BufferedReader input = new BufferedReader( new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)))
-		{
-			String line, valueStr;
-			Station station = null;
-			boolean inIgnoredStreamURLsSection = false;
-			while( (line=input.readLine())!=null )
-			{
-				if (line.toLowerCase().equals("[station]"))
-				{
-					stationList.add(station = new Station());
-					inIgnoredStreamURLsSection = false;
-				}
-				if (line.toLowerCase().equals("[ignoredstreamurls]"))
-				{
-					station = null;
-					inIgnoredStreamURLsSection = true;
-				}
-				
-				if (station!=null)
-				{
-					if ( (valueStr = parseValue(line,"url=" ))!=null ) station.url  = valueStr;
-					if ( (valueStr = parseValue(line,"name="))!=null ) station.name = valueStr;
-					if ( (valueStr = parseValue(line,"type="))!=null ) station.type = SourceType.parseSourceType(valueStr);
-				}
-				
-				if (inIgnoredStreamURLsSection)
-				{
-					if ( (valueStr = parseValue(line,"url=" ))!=null ) ignoredStreamURLs.add(valueStr);
-				}
-			}
-		}
-		catch (FileNotFoundException ex) {}
-		catch (IOException ex) {
-			System.err.printf("IOException while reading StationList: %s%n", ex.getMessage());
-			//ex.printStackTrace();
-		}
-		System.out.println("... done");
 	}
 }
