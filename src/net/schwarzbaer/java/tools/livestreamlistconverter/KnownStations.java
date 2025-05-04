@@ -14,38 +14,23 @@ import java.util.List;
 import java.util.Set;
 import java.util.Vector;
 
-import javax.swing.JList;
+import javax.swing.DefaultListModel;
 
-class StationList
+class KnownStations
 {
 	final Vector<Station> stationList = new Vector<>();
 	final Set<String> ignoredStreamURLs = new HashSet<>();
 
-	boolean isIgnoredStreamURL(String url)
+	Integer moveStation(int index, int inc)
 	{
-		return ignoredStreamURLs.contains(url);
-	}
-
-	Integer decreaseIndexOfStation(int index)
-	{
-		if (0<index && index<stationList.size())
+		int from = index;
+		int to = from+inc;
+		if (0<=Math.min(from, to) && Math.max(from, to)<stationList.size())
 		{
-			Station station = stationList.get(index);
-			stationList.removeElementAt(index);
-			stationList.insertElementAt(station, index-1);
-			return index-1;
-		}
-		return null;
-	}
-
-	Integer increaseIndexOfStation(int index)
-	{
-		if (0<=index && index+1<stationList.size())
-		{
-			Station station = stationList.get(index);
-			stationList.removeElementAt(index);
-			stationList.insertElementAt(station, index+1);
-			return index+1;
+			Station station = stationList.get(from);
+			stationList.removeElementAt(from);
+			stationList.insertElementAt(station, to);
+			return to;
 		}
 		return null;
 	}
@@ -61,25 +46,15 @@ class StationList
 		}
 	}
 
-	void setStationsInList(JList<Station> list)
+	void replaceStationsInList(DefaultListModel<Station> listModel)
 	{
-		list.setListData(stationList);
+		listModel.removeAllElements();
+		listModel.addAll(stationList);
 	}
 
-	boolean hasStations()
-	{
-		return !stationList.isEmpty();
-	}
-
-	int getStationCount()
-	{
-		return stationList.size();
-	}
-
-	Station getStation(int index)
-	{
-		return index<0 || index>=stationList.size() ? null : stationList.get(index);
-	}
+	boolean hasStations() { return !stationList.isEmpty(); }
+	int getStationCount() { return stationList.size(); }
+	Station getStation(int index) { return index<0 || index>=stationList.size() ? null : stationList.get(index); }
 
 	Station addNewStation()
 	{
@@ -93,11 +68,21 @@ class StationList
 		boolean doWith(int index, Station station);
 	}
 	
-	void forEachStation(StationList.ForEachStationAction action)
+	void forEachStation(KnownStations.ForEachStationAction action)
 	{
 		boolean dontStop = true;
 		for (int i=0; i<stationList.size() && dontStop; i++)
 			dontStop = action.doWith(i, stationList.get(i));
+	}
+
+	boolean isIgnoredStreamURL(String url) { return ignoredStreamURLs.contains(url); }
+	void addIgnoredStreamURL(String url) { ignoredStreamURLs.add(url); }
+	void deleteIgnoredStreamURLs(List<String> urls) { urls.forEach(ignoredStreamURLs::remove); }
+
+	void replaceIgnoredStreamURL(String oldUrl, String newUrl)
+	{
+		ignoredStreamURLs.remove(oldUrl);
+		ignoredStreamURLs.add(newUrl);
 	}
 
 	void writeToFile()

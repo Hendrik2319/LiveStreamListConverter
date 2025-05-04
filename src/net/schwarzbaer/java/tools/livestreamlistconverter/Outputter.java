@@ -136,7 +136,7 @@ class Outputter
 			JToolBar toolBar = new JToolBar();
 			toolBar.setFloatable(false);
 			
-			toolBar.add(btnAddOutputFile = LiveStreamListConverter.createButton("Add Output File", e->{
+			toolBar.add(btnAddOutputFile = LiveStreamListConverter.createButton("Add Output File", GrayCommandIcons.IconGroup.Add, e->{
 				if (fileChooser.showSaveDialog(parent)==JFileChooser.APPROVE_OPTION) {
 					File outputFile = fileChooser.getSelectedFile();
 					outputFiles.add(outputFile);
