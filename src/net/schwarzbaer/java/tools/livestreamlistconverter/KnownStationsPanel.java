@@ -27,8 +27,6 @@ import javax.swing.table.TableCellRenderer;
 import net.schwarzbaer.java.lib.gui.Disabler;
 import net.schwarzbaer.java.lib.gui.GeneralIcons.GrayCommandIcons;
 import net.schwarzbaer.java.lib.gui.Tables;
-import net.schwarzbaer.java.lib.gui.Tables.LabelRendererComponent;
-import net.schwarzbaer.java.lib.gui.Tables.SimplifiedColumnConfig;
 import net.schwarzbaer.java.lib.system.Settings.DefaultAppSettings.SplitPaneDividersDefinition;
 import net.schwarzbaer.java.tools.livestreamlistconverter.LiveStreamListConverter.AppSettings;
 
@@ -121,34 +119,14 @@ class KnownStationsPanel extends JPanel
 		updateGuiAccess();
 	}
 
-	private class IgnoredStreamURLsPanel extends JPanel
+	private class IgnoredStreamURLsPanel extends AbstractTablePanel<IgnoredStreamURLsTableModel>
 	{
 		private static final long serialVersionUID = -6629733887524199128L;
-		
-		private final JTable table;
-		private final IgnoredStreamURLsTableModel tableModel;
 
 		IgnoredStreamURLsPanel(Window parent)
 		{
-			super(new BorderLayout());
-			setBorder(BorderFactory.createTitledBorder("Ignored Stream URLs"));
+			super("Ignored Stream URLs", IgnoredStreamURLsTableModel::new);
 			
-			tableModel = new IgnoredStreamURLsTableModel();
-			table = new JTable(tableModel);
-			tableModel.setTable(table);
-			table.setRowSorter(new Tables.SimplifiedRowSorter(tableModel));
-			table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-			table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-			tableModel.setColumnWidths(table);
-			tableModel.setDefaultCellEditorsAndRenderers();
-			table.getSelectionModel().addListSelectionListener(ev -> {
-				updateGuiAccess();
-			});
-			
-			JScrollPane tableScrollPane = new JScrollPane(table);
-			
-			JToolBar toolBar = new JToolBar();
-			toolBar.setFloatable(false);
 			toolBar.add(addCommand(Commands.IgnoredURLDelete, LiveStreamListConverter.createButton("Delete Selected", GrayCommandIcons.IconGroup.Delete, e -> {
 				List<String> urls = Arrays
 					.stream(table.getSelectedRows())
@@ -173,33 +151,15 @@ class KnownStationsPanel extends JPanel
 					updateGuiAccess();
 				}
 			})));
-			
-			add(toolBar, BorderLayout.PAGE_START);
-			add(tableScrollPane, BorderLayout.CENTER);
-		}
-		
-		void resetChangesFlag()
-		{
-			tableModel.setHasChanges(false);
 		}
 
-		boolean hasChanges()
-		{
-			return tableModel.hasChanges();
-		}
-
+		@Override
 		void updateTable()
 		{
 			tableModel.updateTableData();
 		}
 
 		@Override
-		public void setEnabled(boolean enabled)
-		{
-			super.setEnabled(enabled);
-			tableModel.setEnabled(enabled);
-		}
-
 		boolean canBeEnabled(Commands command)
 		{
 			return switch (command)
@@ -210,129 +170,54 @@ class KnownStationsPanel extends JPanel
 		}
 	}
 	
-	private class IgnoredStreamURLsTableModel extends Tables.SimpleGetValueTableModel<String, IgnoredStreamURLsTableModel.ColumnID>
+	private class IgnoredStreamURLsTableModel extends AbstractTableModel<String, IgnoredStreamURLsTableModel.ColumnID>
 	{
 		enum ColumnID implements Tables.AbstractGetValueTableModel.ColumnIDTypeInt<String>
 		{
 			Index ("#"   , Integer.class,  30, null),
 			URL   ("URL" ,  String.class, 450, url -> url),
 			;
-			private final SimplifiedColumnConfig cfg;
+			private final Tables.SimplifiedColumnConfig cfg;
 			private final Function<String, ?> getValue;
 			
 			<V> ColumnID(String name, Class<V> columnClass, int width, Function<String,V> getValue)
 			{
-				this.cfg = new SimplifiedColumnConfig(name, columnClass, 20, -1, width, width);
+				this.cfg = new Tables.SimplifiedColumnConfig(name, columnClass, 20, -1, width, width);
 				this.getValue = getValue;
 			}
 		
-			@Override public SimplifiedColumnConfig getColumnConfig() { return cfg; }
+			@Override public Tables.SimplifiedColumnConfig getColumnConfig() { return cfg; }
 			@Override public Function<String, ?> getGetValue() { return getValue; }
 		}
 	
-		private boolean hasChanges;
-		private boolean enabled;
-	
 		IgnoredStreamURLsTableModel()
 		{
-			super(ColumnID.values(), getSortedList(knownStations.ignoredStreamURLs));
-			hasChanges = false;
-			enabled = true;
-		}
-	
-
-		private static String[] getSortedList(Set<String> data)
-		{
-			return data.stream().sorted().toArray(String[]::new);
-		}
-	
-		void setEnabled(boolean enabled) { this.enabled = enabled; }
-		void setHasChanges(boolean hasChanges) { this.hasChanges = hasChanges; }
-		boolean hasChanges() { return hasChanges; }
-
-		@Override
-		public void setDefaultCellEditorsAndRenderers()
-		{
-			IgnoredStreamURLsTableCellRenderer tcr = new IgnoredStreamURLsTableCellRenderer();
-			for (ColumnID columnID : ColumnID.values())
-				switch (columnID)
-				{
-				case Index: case URL:
-					setCellRenderer(columnID, tcr);
-					break;
-				}
+			super(ColumnID.values(), getSortedList(knownStations.ignoredStreamURLs), ColumnID.Index);
 		}
 		
-		private class IgnoredStreamURLsTableCellRenderer implements TableCellRenderer
+		private static Vector<String> getSortedList(Set<String> data)
 		{
-			private final LabelRendererComponent comp;
-			
-			IgnoredStreamURLsTableCellRenderer()
-			{
-				this.comp = new LabelRendererComponent();
-			}
-
-			@Override
-			public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int rowV, int columnV)
-			{
-				int rowM    = rowV   <0 ? -1 : table.convertRowIndexToModel(rowV);
-				int columnM = columnV<0 ? -1 : table.convertColumnIndexToModel(columnV);
-				ColumnID columnID = getColumnID(columnM);
-				boolean isLastRow = rowM == IgnoredStreamURLsTableModel.super.getRowCount();
-				
-				String valueStr = value==null ? "" : value.toString();
-				if (isLastRow && columnID==ColumnID.Index)
-					valueStr = "+";
-				
-				comp.configureAsTableCellRendererComponent(table, null, valueStr, isSelected, hasFocus);
-				
-				int alignment = SwingConstants.LEFT;
-				if (columnID == ColumnID.Index)
-					alignment = SwingConstants.CENTER;
-				else if (columnID!=null && Number.class.isAssignableFrom(columnID.cfg.columnClass))
-					alignment = SwingConstants.RIGHT;
-				comp.setHorizontalAlignment(alignment);
-				
-				return comp;
-			}
+			List<String> list = data.stream().sorted().toList();
+			return new Vector<>(list);
 		}
-
+		
 		@Override
-		public int getRowCount()
+		protected boolean isColumnEditable(ColumnID columnID)
 		{
-			return super.getRowCount() + 1;
-		}
-
-		@Override
-		public Object getValueAt(int rowIndex, int columnIndex, ColumnID columnID)
-		{
-			if (columnID == ColumnID.Index) return rowIndex+1;
-			return super.getValueAt(rowIndex, columnIndex, columnID);
-		}
-
-		@Override
-		protected boolean isCellEditable(int rowIndex, int columnIndex, ColumnID columnID)
-		{
-			if (!enabled)
-				return false;
-			
-			if (columnID == null)
-				return false;
-			
 			return switch (columnID)
 					{
 					case Index -> false;
 					case URL -> true;
 					};
 		}
-
+		
 		@Override
 		protected void setValueAt(Object aValue, int rowIndex, int columnIndex, ColumnID columnID)
 		{
 			if (columnID==null || aValue==null)
 				return;
 			
-			String oldUrl = rowIndex == super.getRowCount() ? null : getRow(rowIndex);
+			String oldUrl = rowIndex+1 == getRowCount() ? null : getRow(rowIndex);
 			
 			switch (columnID)
 			{
@@ -360,34 +245,14 @@ class KnownStationsPanel extends JPanel
 		}
 	}
 
-	private class StationListPanel extends JPanel
+	private class StationListPanel extends AbstractTablePanel<StationListTableModel>
 	{
 		private static final long serialVersionUID = 887703065776534388L;
 		
-		private final JTable table;
-		private final StationListTableModel tableModel;
-		
 		StationListPanel(Window parent)
 		{
-			super(new BorderLayout());
-			setBorder(BorderFactory.createTitledBorder("Stations"));
+			super("Stations", StationListTableModel::new);
 			
-			tableModel = new StationListTableModel();
-			table = new JTable(tableModel);
-			tableModel.setTable(table);
-			table.setRowSorter(new Tables.SimplifiedRowSorter(tableModel));
-			table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-			table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-			tableModel.setColumnWidths(table);
-			tableModel.setDefaultCellEditorsAndRenderers();
-			table.getSelectionModel().addListSelectionListener(ev -> {
-				updateGuiAccess();
-			});
-			
-			JScrollPane tableScrollPane = new JScrollPane(table);
-			
-			JToolBar toolBar = new JToolBar();
-			toolBar.setFloatable(false);
 			//toolBar.add(LiveStreamListConverter.createButton("Show Column Widths", e -> System.out.printf("ColumnWidths: %sy%n", StationListTableModel.getColumnWidthsAsString(table))));
 			//toolBar.addSeparator();
 			toolBar.add(addCommand(Commands.StationDelete, LiveStreamListConverter.createButton("Delete Selected", GrayCommandIcons.IconGroup.Delete, e -> {
@@ -420,44 +285,6 @@ class KnownStationsPanel extends JPanel
 			})));
 			toolBar.add(addCommand(Commands.StationMoveUp  , LiveStreamListConverter.createButton("Move Up"  , GrayCommandIcons.IconGroup.Up  , e -> moveStation(-1))));
 			toolBar.add(addCommand(Commands.StationMoveDown, LiveStreamListConverter.createButton("Move Down", GrayCommandIcons.IconGroup.Down, e -> moveStation(+1))));
-			
-			add(toolBar, BorderLayout.PAGE_START);
-			add(tableScrollPane, BorderLayout.CENTER);
-		}
-		
-		void resetChangesFlag()
-		{
-			tableModel.setHasChanges(false);
-		}
-
-		boolean hasChanges()
-		{
-			return tableModel.hasChanges();
-		}
-
-		void updateTable()
-		{
-			tableModel.fireTableUpdate();
-		}
-
-		@Override
-		public void setEnabled(boolean enabled)
-		{
-			super.setEnabled(enabled);
-			tableModel.setEnabled(enabled);
-		}
-
-		boolean canBeEnabled(Commands command)
-		{
-			return switch(command)
-					{
-					case StationDelete
-						-> table.getSelectedRowCount() > 0;
-					case StationMoveDown, StationMoveUp
-						-> table.getSelectedRowCount() == 1;
-					default
-						-> false;
-					};
 		}
 
 		private void moveStation(int inc)
@@ -475,9 +302,29 @@ class KnownStationsPanel extends JPanel
 				table.setRowSelectionInterval(newIndex.intValue(), newIndex.intValue());
 			}
 		}
+
+		@Override
+		void updateTable()
+		{
+			tableModel.fireTableUpdate();
+		}
+
+		@Override
+		boolean canBeEnabled(Commands command)
+		{
+			return switch(command)
+					{
+					case StationDelete
+						-> table.getSelectedRowCount() > 0;
+					case StationMoveDown, StationMoveUp
+						-> table.getSelectedRowCount() == 1;
+					default
+						-> false;
+					};
+		}
 	}
 
-	private class StationListTableModel extends Tables.SimpleGetValueTableModel<Station, StationListTableModel.ColumnID>
+	private class StationListTableModel extends AbstractTableModel<Station, StationListTableModel.ColumnID>
 	{
 		// ColumnWidths: [25, 305, 450, 46] in ModelOrdery
 		enum ColumnID implements Tables.AbstractGetValueTableModel.ColumnIDTypeInt<Station>
@@ -487,44 +334,39 @@ class KnownStationsPanel extends JPanel
 			URL   ("URL" ,     String.class, 450, station -> station.url ),
 			Type  ("Type", SourceType.class,  50, station -> station.type),
 			;
-			private final SimplifiedColumnConfig cfg;
+			private final Tables.SimplifiedColumnConfig cfg;
 			private final Function<Station, ?> getValue;
 			
 			<V> ColumnID(String name, Class<V> columnClass, int width, Function<Station,V> getValue)
 			{
-				this.cfg = new SimplifiedColumnConfig(name, columnClass, 20, -1, width, width);
+				this.cfg = new Tables.SimplifiedColumnConfig(name, columnClass, 20, -1, width, width);
 				this.getValue = getValue;
 			}
 		
-			@Override public SimplifiedColumnConfig getColumnConfig() { return cfg; }
+			@Override public Tables.SimplifiedColumnConfig getColumnConfig() { return cfg; }
 			@Override public Function<Station, ?> getGetValue() { return getValue; }
 			
 		}
 
-		private boolean hasChanges;
-		private boolean enabled;
-
 		StationListTableModel()
 		{
-			super(ColumnID.values(), knownStations.stationList);
-			hasChanges = false;
-			enabled = true;
+			super(ColumnID.values(), knownStations.stationList, ColumnID.Index);
 		}
-
-		void setEnabled(boolean enabled) { this.enabled = enabled; }
-		void setHasChanges(boolean hasChanges) { this.hasChanges = hasChanges; }
-		boolean hasChanges() { return hasChanges; }
 
 		@Override
 		public void setDefaultCellEditorsAndRenderers()
 		{
+			super.setDefaultCellEditorsAndRenderers();
+			
 			setCellEditor(ColumnID.Type, new Tables.ComboboxCellEditor<>(SourceType.values()));
 			
 			StationListTableCellRenderer tcr = new StationListTableCellRenderer();
 			for (ColumnID columnID : ColumnID.values())
 				switch (columnID)
 				{
-				case Index: case Name: case URL: case Type:
+				case Index:
+					break;
+				case Name: case URL: case Type:
 					setCellRenderer(columnID, tcr);
 					break;
 				}
@@ -532,11 +374,11 @@ class KnownStationsPanel extends JPanel
 		
 		private class StationListTableCellRenderer implements TableCellRenderer
 		{
-			private final LabelRendererComponent comp;
+			private final Tables.LabelRendererComponent comp;
 			
 			StationListTableCellRenderer()
 			{
-				this.comp = new LabelRendererComponent();
+				this.comp = new Tables.LabelRendererComponent();
 			}
 
 			@Override
@@ -545,18 +387,15 @@ class KnownStationsPanel extends JPanel
 				int rowM    = rowV   <0 ? -1 : table.convertRowIndexToModel(rowV);
 				int columnM = columnV<0 ? -1 : table.convertColumnIndexToModel(columnV);
 				ColumnID columnID = getColumnID(columnM);
-				boolean isLastRow = rowM == StationListTableModel.super.getRowCount();
+				boolean isLastRow = rowM+1 == getRowCount();
 				
 				String valueStr = value==null ? "" : value.toString();
-				if (isLastRow && columnID==ColumnID.Index)
-					valueStr = "+";
-				
 				boolean isCellEditable = isCellEditable(rowM, columnM, columnID);
 				Supplier<Color> getCustomBackground = isCellEditable && value==null && !isLastRow ? ()->Color.RED : null;
 				comp.configureAsTableCellRendererComponent(table, null, valueStr, isSelected, hasFocus, getCustomBackground, null);
 				
 				int alignment = SwingConstants.LEFT;
-				if (columnID == ColumnID.Index || columnID == ColumnID.Type)
+				if (columnID == ColumnID.Type)
 					alignment = SwingConstants.CENTER;
 				else if (columnID!=null && Number.class.isAssignableFrom(columnID.cfg.columnClass))
 					alignment = SwingConstants.RIGHT;
@@ -567,27 +406,8 @@ class KnownStationsPanel extends JPanel
 		}
 
 		@Override
-		public int getRowCount()
+		protected boolean isColumnEditable(ColumnID columnID)
 		{
-			return super.getRowCount() + 1;
-		}
-
-		@Override
-		public Object getValueAt(int rowIndex, int columnIndex, ColumnID columnID)
-		{
-			if (columnID == ColumnID.Index) return rowIndex+1;
-			return super.getValueAt(rowIndex, columnIndex, columnID);
-		}
-
-		@Override
-		protected boolean isCellEditable(int rowIndex, int columnIndex, ColumnID columnID)
-		{
-			if (!enabled)
-				return false;
-			
-			if (columnID == null)
-				return false;
-			
 			return switch (columnID)
 					{
 					case Index -> false;
@@ -603,7 +423,7 @@ class KnownStationsPanel extends JPanel
 			
 			Station row;
 			boolean newRow = false;
-			if (rowIndex == super.getRowCount())
+			if (rowIndex+1 == getRowCount())
 			{
 				row = knownStations.addNewStation();
 				newRow = true;
@@ -628,5 +448,145 @@ class KnownStationsPanel extends JPanel
 			hasChanges = true;
 			updateGuiAccess();
 		}
+	}
+
+	private abstract class AbstractTablePanel<TableModelType extends AbstractTableModel<?,?>> extends JPanel
+	{
+		private static final long serialVersionUID = 817077438923563653L;
+		
+		protected final JTable table;
+		protected final TableModelType tableModel;
+		protected final JToolBar toolBar;
+		
+		protected AbstractTablePanel(String borderTitle, Supplier<TableModelType> tableModelConstructor)
+		{
+			super(new BorderLayout());
+			setBorder(BorderFactory.createTitledBorder("Ignored Stream URLs"));
+			
+			tableModel = tableModelConstructor.get();
+			table = new JTable(tableModel);
+			tableModel.setTable(table);
+			table.setRowSorter(new Tables.SimplifiedRowSorter(tableModel));
+			table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+			table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+			tableModel.setColumnWidths(table);
+			tableModel.setDefaultCellEditorsAndRenderers();
+			table.getSelectionModel().addListSelectionListener(ev -> onRowSelect());
+			
+			JScrollPane tableScrollPane = new JScrollPane(table);
+			
+			toolBar = new JToolBar();
+			toolBar.setFloatable(false);
+			
+			add(toolBar, BorderLayout.PAGE_START);
+			add(tableScrollPane, BorderLayout.CENTER);
+		}
+		
+		protected void onRowSelect()
+		{
+			updateGuiAccess();
+		}
+		
+		void resetChangesFlag()
+		{
+			tableModel.setHasChanges(false);
+		}
+	
+		boolean hasChanges()
+		{
+			return tableModel.hasChanges();
+		}
+	
+		@Override
+		public void setEnabled(boolean enabled)
+		{
+			super.setEnabled(enabled);
+			tableModel.setEnabled(enabled);
+		}
+		
+		abstract void updateTable();
+		abstract boolean canBeEnabled(Commands command);
+	}
+
+	private abstract class AbstractTableModel<ValueType, ColumnIDType extends Tables.AbstractGetValueTableModel.ColumnIDTypeInt<ValueType>>
+			extends Tables.SimpleGetValueTableModel<ValueType, ColumnIDType>
+	{
+		protected boolean hasChanges;
+		protected boolean enabled;
+		private final ColumnIDType indexColumnID;
+	
+		protected AbstractTableModel(ColumnIDType[] columns, Vector<ValueType> data, ColumnIDType indexColumnID)
+		{
+			super(columns, data);
+			this.indexColumnID = indexColumnID;
+			hasChanges = false;
+			enabled = true;
+		}
+		
+		void setEnabled(boolean enabled) { this.enabled = enabled; }
+		void setHasChanges(boolean hasChanges) { this.hasChanges = hasChanges; }
+		boolean hasChanges() { return hasChanges; }
+		
+		@Override
+		public void setDefaultCellEditorsAndRenderers()
+		{
+			super.setDefaultCellEditorsAndRenderers();
+			setCellRenderer(indexColumnID, new IndexColumnCellRenderer());
+		}
+	
+		protected class IndexColumnCellRenderer implements TableCellRenderer
+		{
+			private final Tables.LabelRendererComponent comp;
+			
+			IndexColumnCellRenderer()
+			{
+				this.comp = new Tables.LabelRendererComponent();
+			}
+	
+			@Override
+			public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int rowV, int columnV)
+			{
+				int rowM    = rowV   <0 ? -1 : table.convertRowIndexToModel(rowV);
+				int columnM = columnV<0 ? -1 : table.convertColumnIndexToModel(columnV);
+				ColumnIDType columnID = getColumnID(columnM);
+				boolean isLastRow = rowM == AbstractTableModel.super.getRowCount();
+				
+				String valueStr = value==null ? "" : value.toString();
+				if (isLastRow && columnID==indexColumnID)
+					valueStr = "+";
+				
+				comp.configureAsTableCellRendererComponent(table, null, valueStr, isSelected, hasFocus);
+				comp.setHorizontalAlignment(columnID == indexColumnID ? SwingConstants.CENTER : SwingConstants.LEFT);
+				
+				return comp;
+			}
+		}
+	
+		@Override
+		public int getRowCount()
+		{
+			return super.getRowCount() + 1;
+		}
+	
+		@Override
+		public Object getValueAt(int rowIndex, int columnIndex, ColumnIDType columnID)
+		{
+			if (columnID == indexColumnID) return rowIndex+1;
+			return super.getValueAt(rowIndex, columnIndex, columnID);
+		}
+	
+		@Override
+		protected boolean isCellEditable(int rowIndex, int columnIndex, ColumnIDType columnID)
+		{
+			if (!enabled)
+				return false;
+			
+			if (columnID == null)
+				return false;
+			
+			return isColumnEditable(columnID);
+		}
+	
+		protected abstract boolean isColumnEditable(ColumnIDType columnID);
 	}
 }
