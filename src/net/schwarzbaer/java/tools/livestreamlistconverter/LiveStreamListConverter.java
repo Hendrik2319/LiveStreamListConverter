@@ -64,6 +64,7 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 			ProgressDialog.runWithProgressDialog(converter.mainWindow, "Progress", 200, pd -> {
 				converter.enableGUI(false);
 				if (!pd.wasCanceled()) converter.determineStreamURLsTask(pd);
+				System.out.printf("%nWrite files: %d files%n", converter.countOutputFiles());
 				converter.forEachFormat((fe, outputter) -> {
 					if (!pd.wasCanceled())
 						outputter.generateAndWriteContentToFile(pd);
@@ -265,6 +266,7 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 		case GenerateAllFiles:
 			ProgressDialog.runWithProgressDialog(mainWindow, "Progress", 200, pd -> {
 				enableGUI(false);
+				System.out.printf("%nWrite files: %d files%n", countOutputFiles());
 				forEachFormat((fe, outputter) -> {
 					if (!pd.wasCanceled())
 						outputter.generateAndWriteContentToFile(pd);
@@ -312,6 +314,18 @@ public final class LiveStreamListConverter implements ActionListener, BaseConfig
 	public Vector<StreamAdress> getAdressList()
 	{
 		return adressList;
+	}
+
+	private int countOutputFiles()
+	{
+		int fileCount = 0;
+		for (FormatEnum fe : FormatEnum.values())
+		{
+			Outputter outputter = outputerMap.get(fe);
+			if (outputter!=null)
+				fileCount += outputter.countOutputFiles();
+		}
+		return fileCount;
 	}
 
 	@Override

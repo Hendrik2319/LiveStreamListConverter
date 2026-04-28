@@ -57,6 +57,11 @@ class Outputter
 		doBeforeGenerating = null;
 	}
 	
+	int countOutputFiles()
+	{
+		return outputFiles.size();
+	}
+
 	void forEachOutputFile(Consumer<File> action)
 	{
 		outputFiles.forEach(action);
@@ -94,10 +99,13 @@ class Outputter
 		try (PrintWriter output = new PrintWriter(outputFile))
 		{
 			output.println(content);
+			System.out.printf("File \"%s\" written%n", outputFile==null ? "<NULL>" : outputFile.getAbsolutePath());
 		}
 		catch (FileNotFoundException e)
 		{
-			e.printStackTrace();
+			System.err.printf("File \"%s\" not found:%n", outputFile==null ? "<NULL>" : outputFile.getAbsolutePath());
+			System.err.printf("    %s%n", e.getMessage());
+			//e.printStackTrace();
 		}
 	}
 	
